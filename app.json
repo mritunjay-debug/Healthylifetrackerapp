@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Habit Hero",
+    "slug": "agon-preview",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "streakforge",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0D9488"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMotionUsageDescription": "This app uses motion data to track your steps, running activity, and sleep trends."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0D9488",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACTIVITY_RECOGNITION",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "552f0665-e30d-4f11-9ea9-97bc22a22809"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/552f0665-e30d-4f11-9ea9-97bc22a22809"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "owner": "arcadalabs",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  }
+}
