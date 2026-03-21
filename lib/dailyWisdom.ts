@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { Notifications } from './notificationsApi';
 import { getAllWisdomEntries, WisdomCategory } from './wisdomLibrary';
 
 const DAILY_WISDOM_NOTIFICATION_IDS = '@daily_wisdom_notification_ids';

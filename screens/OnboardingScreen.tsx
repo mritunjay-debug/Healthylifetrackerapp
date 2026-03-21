@@ -30,9 +30,9 @@ const slides = [
     icon: 'water-outline',
   },
   {
-    title: '100% Offline & Private',
-    subtitle: 'Your data stays on your device',
-    description: 'No accounts, no tracking, no cloud. Just you and your streaks.',
+    title: 'Private by default',
+    subtitle: 'Your habit data stays on your device',
+    description: 'Sign in secures your account; streaks and logs remain local-first.',
     icon: 'shield-checkmark-outline',
   },
 ];

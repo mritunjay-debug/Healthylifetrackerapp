@@ -12,6 +12,7 @@ const CRAVING_LOGS_KEY = '@craving_logs';
 const SAVINGS_GOALS_KEY = '@savings_goals';
 const DIET_LOGS_KEY = '@diet_logs';
 const CRAVING_SWAPS_KEY = '@craving_swaps';
+const AUTH_SKIPPED_KEY = '@auth_skipped';
 
 export async function getHabits(): Promise<Habit[]> {
   try {
@@ -64,6 +65,27 @@ export async function setOnboarded(): Promise<void> {
   } catch (error) {
     console.error('Error setting onboarded:', error);
   }
+}
+
+export async function isAuthSkipped(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(AUTH_SKIPPED_KEY)) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export async function setAuthSkipped(skipped: boolean): Promise<void> {
+  try {
+    if (skipped) await AsyncStorage.setItem(AUTH_SKIPPED_KEY, 'true');
+    else await AsyncStorage.removeItem(AUTH_SKIPPED_KEY);
+  } catch (error) {
+    console.error('Error setting auth skipped:', error);
+  }
+}
+
+export async function clearAuthSkipped(): Promise<void> {
+  await setAuthSkipped(false);
 }
 
 export async function getAchievements(): Promise<Achievement[]> {

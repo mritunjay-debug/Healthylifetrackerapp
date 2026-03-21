@@ -5,12 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Alert,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { AppPreferences, defaultPreferences, getAppPreferences, getUnitDefaultsByCountry, saveAppPreferences } from '../lib/appPreferences';
 import { cancelDailyWisdomNotification, scheduleCategoryWisdomNotifications } from '../lib/dailyWisdom';
@@ -18,6 +19,7 @@ import { cancelDailyWisdomNotification, scheduleCategoryWisdomNotifications } fr
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
   const { isDark, toggleTheme, tokens } = useTheme();
+  const { user, signOut, guestMode, exitGuestMode } = useAuth();
   const c = tokens.colors;
   const [prefs, setPrefs] = useState<AppPreferences>(defaultPreferences);
 
@@ -36,8 +38,27 @@ export default function SettingsScreen() {
   const handlePrivacy = () => {
     Alert.alert(
       'Privacy Policy',
-      'StreakForge is 100% offline. Your data never leaves your device. We don\'t collect any personal information.'
+      'Habit data is stored on your device. Your account email is used only for sign-in with your chosen backend.'
     );
+  };
+
+  const handleSignOut = () => {
+    Alert.alert('Sign out', 'You can sign in again anytime.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          await signOut();
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+        },
+      },
+    ]);
+  };
+
+  const handleSignInFromGuest = async () => {
+    await exitGuestMode();
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
   const saveRegionalPrefs = async (next: AppPreferences) => {
@@ -88,6 +109,61 @@ export default function SettingsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={[styles.title, { color: c.text }]}>Settings</Text>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: c.text }]}>Account</Text>
+          {guestMode ? (
+            <>
+              <View
+                style={[
+                  styles.settingItem,
+                  { backgroundColor: c.surface, flexDirection: 'column', alignItems: 'stretch' },
+                ]}
+              >
+                <Text style={[styles.settingText, { color: c.mutedText, marginBottom: 4 }]}>
+                  Using the app without an account
+                </Text>
+                <Text style={[styles.settingText, { color: c.text }]}>
+                  Habits stay on this device. Sign in anytime to link a cloud account.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.settingItem, { backgroundColor: c.surface }]}
+                onPress={handleSignInFromGuest}
+              >
+                <View style={styles.settingLeft}>
+                  <Ionicons name="log-in-outline" size={24} color={c.primary} />
+                  <Text style={[styles.settingText, { color: c.text }]}>Sign in</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={c.mutedText} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View
+                style={[
+                  styles.settingItem,
+                  { backgroundColor: c.surface, flexDirection: 'column', alignItems: 'stretch' },
+                ]}
+              >
+                <Text style={[styles.settingText, { color: c.mutedText, marginBottom: 4 }]}>Signed in as</Text>
+                <Text style={[styles.settingText, { color: c.text, fontWeight: '700' }]}>
+                  {user?.email ?? '—'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.settingItem, { backgroundColor: c.surface }]}
+                onPress={handleSignOut}
+              >
+                <View style={styles.settingLeft}>
+                  <Ionicons name="log-out-outline" size={24} color={c.danger} />
+                  <Text style={[styles.settingText, { color: c.danger }]}>Sign out</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={c.mutedText} />
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: c.text }]}>Appearance</Text>

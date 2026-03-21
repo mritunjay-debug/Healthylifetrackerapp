@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev": "npx vercel dev --listen 3005"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
-    "@vercel/node": "^5.1.8"
+    "@vercel/node": "^5.1.8",
+    "dotenv": "^17.3.1"
   },
   "devDependencies": {
     "typescript": "~5.3.3"

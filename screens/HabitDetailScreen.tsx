@@ -5,11 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Dimensions,
   Alert,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
@@ -20,8 +20,18 @@ import SkeletonBlock from '../components/ui/Skeleton';
 
 const { width } = Dimensions.get('window');
 
+const moodOptions = [
+  { emoji: '😢', label: 'Terrible', value: 1 },
+  { emoji: '😟', label: 'Bad', value: 2 },
+  { emoji: '😐', label: 'Okay', value: 3 },
+  { emoji: '🙂', label: 'Good', value: 4 },
+  { emoji: '😊', label: 'Great', value: 5 },
+];
+
 export default function HabitDetailScreen() {
   const [habit, setHabit] = useState<Habit | null>(null);
+  const [selectedMood, setSelectedMood] = useState<number | null>(null);
+  const [noteText, setNoteText] = useState('');
   const navigation = useNavigation();
   const route = useRoute();
   const { habitId } = route.params as { habitId: string };
@@ -61,17 +71,6 @@ export default function HabitDetailScreen() {
     (habit.longestStreak / Math.max(habit.completedDates.length, 1)) * 100 : 0;
 
   const unlockedMilestones = milestones.filter(m => habit.longestStreak >= m.days);
-
-  const [selectedMood, setSelectedMood] = useState<number | null>(null);
-  const [noteText, setNoteText] = useState('');
-
-  const moodOptions = [
-    { emoji: '😢', label: 'Terrible', value: 1 },
-    { emoji: '😟', label: 'Bad', value: 2 },
-    { emoji: '😐', label: 'Okay', value: 3 },
-    { emoji: '🙂', label: 'Good', value: 4 },
-    { emoji: '😊', label: 'Great', value: 5 },
-  ];
 
   const toggleToday = async () => {
     const newCompletedDates = isCompletedToday

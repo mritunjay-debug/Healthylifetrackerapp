@@ -271,8 +271,8 @@ export const defaultHabits: Omit<Habit, 'id' | 'startDate' | 'completedDates' | 
 export const milestones: Milestone[] = [
   { days: 7, name: 'Week Warrior', icon: 'star', description: '7 days strong!', points: 50 },
   { days: 30, name: 'Month Master', icon: 'trophy', description: '30 days of consistency!', points: 150 },
-  { days: 100, name: 'Century Champion', icon: 'crown', description: '100 days achieved!', points: 500 },
-  { days: 365, name: 'Year Legend', icon: 'gem', description: '365 days of dedication!', points: 2000 },
+  { days: 100, name: 'Century Champion', icon: 'ribbon', description: '100 days achieved!', points: 500 },
+  { days: 365, name: 'Year Legend', icon: 'diamond', description: '365 days of dedication!', points: 2000 },
 ];
 
 export const achievements: Achievement[] = [

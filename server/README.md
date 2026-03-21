@@ -43,7 +43,8 @@ Use `session.access_token` from signup/login (or from Supabase client `getSessio
    cp .env.example .env.local
    ```
 
-   Fill `SUPABASE_URL` and `SUPABASE_ANON_KEY` from Supabase → Project Settings → API.
+   Fill `SUPABASE_URL` and `SUPABASE_ANON_KEY` from Supabase → Project Settings → API.  
+   `lib/env.ts` loads these files automatically; if you still see **Missing required environment variable: SUPABASE_URL**, confirm `.env.local` exists under `server/` and that **Vercel** has both variables for Production (and Preview if you use it).
 
 4. **Database**
 

@@ -1,10 +1,14 @@
 import React from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { isOnboarded } from '../lib/storage';
+import LoginScreen from '../screens/LoginScreen';
+import SignupScreen from '../screens/SignupScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import HomeScreen from '../screens/HomeScreen';
 import HabitsScreen from '../screens/HabitsScreen';
@@ -78,27 +82,37 @@ function MainTabs() {
 }
 
 export default function AppNavigator() {
-  const [isOnboardedState, setIsOnboardedState] = React.useState<boolean | null>(null);
+  const { loading: authLoading, session, guestMode } = useAuth();
+  const [onboardedState, setOnboardedState] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
-    checkOnboarding();
+    isOnboarded().then(setOnboardedState);
   }, []);
 
-  const checkOnboarding = async () => {
-    const onboarded = await isOnboarded();
-    setIsOnboardedState(onboarded);
-  };
+  const ready = !authLoading && onboardedState !== null;
 
-  if (isOnboardedState === null) {
-    return null; // Loading
+  const initialRouteName = React.useMemo(() => {
+    if (!session && !guestMode) return 'Login';
+    if (!onboardedState) return 'Onboarding';
+    return 'Main';
+  }, [session, guestMode, onboardedState]);
+
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
   }
 
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName={isOnboardedState ? 'Main' : 'Onboarding'}
+        initialRouteName={initialRouteName}
         screenOptions={{ headerShown: false }}
       >
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Signup" component={SignupScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen name="HabitDetail" component={HabitDetailScreen} />

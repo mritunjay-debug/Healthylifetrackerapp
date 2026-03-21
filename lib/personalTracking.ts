@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { Notifications } from './notificationsApi';
 
 export type PersonalTrackCategory = 'diet' | 'quit' | 'running' | 'custom';
 

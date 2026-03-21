@@ -18,5 +18,6 @@
     "skipLibCheck": true,
     "target": "ESNext",
     "strict": true
-  }
+  },
+  "extends": "expo/tsconfig.base"
 }

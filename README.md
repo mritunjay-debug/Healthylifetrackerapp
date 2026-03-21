@@ -8,7 +8,8 @@ A comprehensive mobile app for building unbreakable habits with advanced feature
 - **Quit & Transform**: Comprehensive smoking cessation support with cravings logging and health benefits timeline
 - **Gamification**: Levels, achievements, points, and daily challenges
 - **Sensor Integration**: Automatic sleep and activity tracking (when available)
-- **Offline-First**: All data stored locally, no internet required
+- **Account sign-in**: Email/password via your deployed API (`/api/auth/login`, `/api/auth/signup`); session stored securely
+- **Offline-First**: Habit data stored locally; API used for authentication
 - **Beautiful UI**: Modern design with teal-orange gradients, neumorphic cards, and micro-animations
 
 ## Tech Stack
@@ -27,12 +28,14 @@ A comprehensive mobile app for building unbreakable habits with advanced feature
    npm install
    ```
 
-2. Start the development server:
+2. (Optional) Point the app at a local API — copy `.env.example` to `.env` and set `EXPO_PUBLIC_API_URL`. The default is the production URL in `app.config.js`.
+
+3. Start the development server:
    ```bash
    npm start
    ```
 
-3. Scan the QR code with Expo Go on your device.
+4. Scan the QR code with Expo Go on your device, then sign in or create an account.
 
 ## SDK Compatibility
 
