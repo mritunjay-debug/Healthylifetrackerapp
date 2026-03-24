@@ -55,7 +55,7 @@ Use `session.access_token` from signup/login (or from Supabase client `getSessio
    ```bash
    npm i -g vercel
    cd server
-   vercel dev
+   npm run dev:api
    ```
 
    Or deploy first and call the production URL.
@@ -91,7 +91,7 @@ Use `session.access_token` from signup/login (or from Supabase client `getSessio
 ## Frontend integration (Expo / web)
 
 - After login, store `session.access_token` (e.g. SecureStore) and send it on API calls.
-- Base URL: `https://your-deployment.vercel.app` (or `http://localhost:3000` with `vercel dev`).
+- Base URL: `https://your-deployment.vercel.app` (or `http://localhost:3005` with `npm run dev:api`).
 - Example:
 
   ```ts

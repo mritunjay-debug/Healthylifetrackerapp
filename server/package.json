@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "dev": "npx vercel dev --listen 3005"
+    "dev:api": "npx vercel dev --listen 3005"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

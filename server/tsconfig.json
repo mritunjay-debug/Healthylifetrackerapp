@@ -2,7 +2,9 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
@@ -17,8 +19,14 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@lib/*": ["lib/*"]
+      "@lib/*": [
+        "lib/*"
+      ]
     }
   },
-  "include": ["api/**/*.ts", "lib/**/*.ts"]
+  "include": [
+    "api/**/*.ts",
+    "lib/**/*.ts"
+  ],
+  "extends": "expo/tsconfig.base"
 }
