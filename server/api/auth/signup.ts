@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getServerEnv } from "../../lib/env";
-import { createAnonClient } from "../../lib/supabase";
+import { createAnonClient, createServiceRoleClient } from "../../lib/supabase";
 import {
   badRequest,
   handleOptions,
@@ -47,23 +47,61 @@ export default async function handler(
   try {
     const env = getServerEnv();
     const supabase = createAnonClient(env);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    if (env.supabaseServiceRoleKey) {
+      const admin = createServiceRoleClient(env);
+      const { data: created, error: createError } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+      if (createError && !/already registered|already exists/i.test(createError.message)) {
+        badRequest(res, createError.message);
+        return;
+      }
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (loginError || !loginData.session) {
+        badRequest(res, loginError?.message || "Could not sign in after account creation");
+        return;
+      }
+      jsonOk(res, {
+        user: loginData.user ?? created?.user ?? null,
+        session: loginData.session,
+        message: "Signed up and logged in",
+      });
+      return;
+    }
 
+    const { data: signupData, error } = await supabase.auth.signUp({ email, password });
     if (error) {
       badRequest(res, error.message);
       return;
     }
 
-    jsonOk(res, {
-      user: data.user,
-      session: data.session,
-      message: data.session
-        ? "Signed up and logged in"
-        : "Check your email to confirm your account (if email confirmation is enabled)",
-    });
+    // If signup does not return a session, try immediate sign-in.
+    // This enables auto-login on projects that allow it.
+    let session = signupData.session;
+    let user = signupData.user;
+    let message = "Signed up and logged in";
+
+    if (!session) {
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (!loginError && loginData.session) {
+        session = loginData.session;
+        user = loginData.user ?? user;
+      } else {
+        message =
+          loginError?.message ||
+          "Check your email to confirm your account (email confirmation is enabled).";
+      }
+    }
+
+    jsonOk(res, { user, session, message });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Signup failed";
     serverError(res, msg);

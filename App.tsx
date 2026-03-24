@@ -13,6 +13,8 @@ import {
   configureNotificationModule,
   requestNotificationPermissionsAndChannel,
 } from './lib/setupAppNotifications';
+import { registerForPushNotifications } from './lib/pushNotifications';
+import { requestAllSensorPermissions } from './lib/sensorPermissions';
 
 configureNotificationModule();
 
@@ -24,6 +26,8 @@ export default function App() {
 
   useEffect(() => {
     requestNotificationPermissionsAndChannel();
+    registerForPushNotifications();
+    requestAllSensorPermissions();
   }, []);
 
   return (
@@ -37,7 +41,7 @@ export default function App() {
           ) : (
             <GestureHandlerRootView style={{ flex: 1 }}>
               <AppNavigator />
-              <StatusBar style="auto" />
+              <StatusBar style="auto" translucent={false} />
             </GestureHandlerRootView>
           )}
         </AuthProvider>

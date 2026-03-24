@@ -1,10 +1,11 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { QuitProfile, HealthMilestone } from '../lib/types';
 import { getQuitProfile } from '../lib/storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const healthMilestones: HealthMilestone[] = [
   { days: 0.0139, title: '20 minutes', description: 'Heart rate drops', icon: 'heart', unlocked: false },

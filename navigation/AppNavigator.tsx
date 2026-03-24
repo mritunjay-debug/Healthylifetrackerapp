@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { isOnboarded } from '../lib/storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import LandingScreen from '../screens/LandingScreen';
 import LoginScreen from '../screens/LoginScreen';
 import SignupScreen from '../screens/SignupScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -32,6 +34,7 @@ const Tab = createBottomTabNavigator();
 
 function MainTabs() {
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -62,12 +65,15 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: isDark ? '#000' : '#fff',
           borderTopColor: isDark ? '#222' : '#eee',
+          paddingBottom: Math.max(insets.bottom, 8),
+          height: 58 + Math.max(insets.bottom, 8),
         },
         headerStyle: {
           backgroundColor: isDark ? '#000' : '#fff',
         },
         headerTintColor: isDark ? '#fff' : '#000',
         headerShown: false,
+        tabBarHideOnKeyboard: true,
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
@@ -92,7 +98,7 @@ export default function AppNavigator() {
   const ready = !authLoading && onboardedState !== null;
 
   const initialRouteName = React.useMemo(() => {
-    if (!session && !guestMode) return 'Login';
+    if (!session && !guestMode) return 'Landing';
     if (!onboardedState) return 'Onboarding';
     return 'Main';
   }, [session, guestMode, onboardedState]);
@@ -111,6 +117,7 @@ export default function AppNavigator() {
         initialRouteName={initialRouteName}
         screenOptions={{ headerShown: false }}
       >
+        <Stack.Screen name="Landing" component={LandingScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Signup" component={SignupScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />

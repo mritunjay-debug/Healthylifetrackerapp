@@ -15,16 +15,27 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { AppPreferences, defaultPreferences, getAppPreferences, getUnitDefaultsByCountry, saveAppPreferences } from '../lib/appPreferences';
 import { cancelDailyWisdomNotification, scheduleCategoryWisdomNotifications } from '../lib/dailyWisdom';
+import {
+  registerForPushNotifications,
+  sendLocalTestNotification,
+  sendRemoteReminderForSelf,
+  getStoredPushToken,
+} from '../lib/pushNotifications';
+import { requestAllSensorPermissions } from '../lib/sensorPermissions';
+import { syncPushTokenToAccount } from '../lib/authApi';
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
   const { isDark, toggleTheme, tokens } = useTheme();
-  const { user, signOut, guestMode, exitGuestMode } = useAuth();
+  const { user, session, signOut, guestMode, exitGuestMode } = useAuth();
   const c = tokens.colors;
   const [prefs, setPrefs] = useState<AppPreferences>(defaultPreferences);
+  const [pushToken, setPushToken] = useState<string | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<'idle' | 'ok' | 'warn'>('idle');
 
   useEffect(() => {
     getAppPreferences().then(setPrefs);
+    getStoredPushToken().then(setPushToken);
   }, []);
 
   const handleExport = () => {
@@ -50,7 +61,7 @@ export default function SettingsScreen() {
         style: 'destructive',
         onPress: async () => {
           await signOut();
-          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+          navigation.reset({ index: 0, routes: [{ name: 'Landing' }] });
         },
       },
     ]);
@@ -58,7 +69,7 @@ export default function SettingsScreen() {
 
   const handleSignInFromGuest = async () => {
     await exitGuestMode();
-    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+    navigation.reset({ index: 0, routes: [{ name: 'Landing' }] });
   };
 
   const saveRegionalPrefs = async (next: AppPreferences) => {
@@ -103,6 +114,52 @@ export default function SettingsScreen() {
         runningEvening: next.runningEveningTime,
       });
     }
+  };
+
+  const handleEnablePush = async () => {
+    const res = await registerForPushNotifications();
+    if (res.enabled && res.token) {
+      setPushToken(res.token);
+      if (session?.access_token) {
+        try {
+          await syncPushTokenToAccount(session.access_token, res.token);
+        } catch {
+          // non-blocking
+        }
+      }
+      setPermissionStatus('ok');
+      Alert.alert('Push enabled', 'Push token registered successfully.');
+    } else {
+      setPermissionStatus('warn');
+      Alert.alert('Push not enabled', res.reason || 'Could not enable push notifications.');
+    }
+  };
+
+  const handleAskAllPermissions = async () => {
+    const sensor = await requestAllSensorPermissions();
+    const push = await registerForPushNotifications();
+    const ok = sensor.pedometer === 'granted' && push.enabled;
+    setPermissionStatus(ok ? 'ok' : 'warn');
+    Alert.alert(
+      ok ? 'Permissions ready' : 'Some permissions missing',
+      `Sensor: ${sensor.pedometer}\nPush: ${push.enabled ? 'granted' : 'denied'}`
+    );
+    if (push.token) setPushToken(push.token);
+  };
+
+  const handleTestNotification = async () => {
+    if (session?.access_token) {
+      try {
+        await sendRemoteReminderForSelf(session.access_token);
+        Alert.alert('Remote test sent', 'Push was sent to tokens synced with your account.');
+        return;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Remote push failed';
+        Alert.alert('Remote push failed', `${msg}\nFalling back to local test notification.`);
+      }
+    }
+    await sendLocalTestNotification();
+    Alert.alert('Local test sent', 'A local notification has been triggered.');
   };
 
   return (
@@ -163,6 +220,59 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </>
           )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: c.text }]}>Permissions & Notifications</Text>
+          <View
+            style={[
+              styles.settingItem,
+              { backgroundColor: c.surface, flexDirection: 'column', alignItems: 'stretch' },
+            ]}
+          >
+            <Text style={[styles.settingText, { color: c.text, marginLeft: 0, marginBottom: 6 }]}>
+              Permission status:{' '}
+              <Text style={{ color: permissionStatus === 'ok' ? c.success : permissionStatus === 'warn' ? c.danger : c.mutedText }}>
+                {permissionStatus === 'ok' ? 'Ready' : permissionStatus === 'warn' ? 'Needs attention' : 'Not checked'}
+              </Text>
+            </Text>
+            <Text style={[styles.settingText, { color: c.mutedText, marginLeft: 0 }]}>
+              Push token: {pushToken ? `${pushToken.slice(0, 22)}...` : 'Not registered'}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { backgroundColor: c.surface }]}
+            onPress={handleAskAllPermissions}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="shield-checkmark-outline" size={24} color={c.primary} />
+              <Text style={[styles.settingText, { color: c.text }]}>Ask all sensor + push permissions</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={c.mutedText} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { backgroundColor: c.surface }]}
+            onPress={handleEnablePush}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="notifications-outline" size={24} color={c.info} />
+              <Text style={[styles.settingText, { color: c.text }]}>Register push notifications</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={c.mutedText} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingItem, { backgroundColor: c.surface }]}
+            onPress={handleTestNotification}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="paper-plane-outline" size={24} color={c.accent} />
+              <Text style={[styles.settingText, { color: c.text }]}>Send test notification</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={c.mutedText} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>

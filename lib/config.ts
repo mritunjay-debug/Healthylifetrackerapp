@@ -26,5 +26,13 @@ function detectApiFromExpoHost(): string | null {
 export function getApiBaseUrl(): string {
   const url = extra?.apiUrl?.replace(/\/$/, '');
   if (url) return url;
-  return detectApiFromExpoHost() || 'http://localhost:3005';
+  return detectApiFromExpoHost() || 'https://healthylifetrackerapp.vercel.app';
+}
+
+export function getApiBaseUrlCandidates(): string[] {
+  const configured = extra?.apiUrl?.replace(/\/$/, '');
+  const inferred = detectApiFromExpoHost();
+  const defaults = ['https://healthylifetrackerapp.vercel.app', 'http://localhost:3005'];
+  const all = [configured, inferred, ...defaults].filter((v): v is string => Boolean(v));
+  return Array.from(new Set(all));
 }

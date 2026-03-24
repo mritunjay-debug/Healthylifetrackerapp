@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import Card from '../components/ui/Card';
 import { getCustomWisdomEntries, parseWisdomCsv, parseWisdomJson, saveCustomWisdomEntries, WisdomEntry } from '../lib/wisdomLibrary';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function WisdomManagerScreen() {
   const { tokens } = useTheme();

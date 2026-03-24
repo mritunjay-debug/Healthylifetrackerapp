@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   TextInput,
   ScrollView,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
@@ -49,6 +50,18 @@ const steps = [
   },
 ];
 
+const QUIT_ONBOARDING_DRAFT_KEY = '@quit_onboarding_draft_v1';
+
+type QuitOnboardingDraft = {
+  currentStep: number;
+  quitType: 'smoking' | 'vaping';
+  dailyAmount: string;
+  costPerUnit: string;
+  currency: string;
+  nicotineStrength: string;
+  weightGoal: string;
+};
+
 export default function QuitOnboardingScreen() {
   const [currentStep, setCurrentStep] = useState(0);
   const [quitType, setQuitType] = useState<'smoking' | 'vaping'>('smoking');
@@ -63,7 +76,47 @@ export default function QuitOnboardingScreen() {
 
   useEffect(() => {
     getAppPreferences().then((prefs) => setCurrency(prefs.currencySymbol || '$'));
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(QUIT_ONBOARDING_DRAFT_KEY);
+        if (raw) {
+          const d = JSON.parse(raw) as QuitOnboardingDraft;
+          setCurrentStep(Math.max(0, Math.min(steps.length - 1, d.currentStep ?? 0)));
+          setQuitType(d.quitType ?? 'smoking');
+          setDailyAmount(d.dailyAmount ?? '');
+          setCostPerUnit(d.costPerUnit ?? '');
+          setCurrency(d.currency ?? '$');
+          setNicotineStrength(d.nicotineStrength ?? '');
+          setWeightGoal(d.weightGoal ?? '');
+          return;
+        }
+      } catch {
+        // ignore malformed draft
+      }
+      // First-time defaults.
+      setCurrentStep(0);
+      setQuitType('smoking');
+      setDailyAmount('10');
+      setCostPerUnit('5');
+      setNicotineStrength('');
+      setWeightGoal('');
+    })();
   }, []);
+
+  useEffect(() => {
+    const draft: QuitOnboardingDraft = {
+      currentStep,
+      quitType,
+      dailyAmount,
+      costPerUnit,
+      currency,
+      nicotineStrength,
+      weightGoal,
+    };
+    AsyncStorage.setItem(QUIT_ONBOARDING_DRAFT_KEY, JSON.stringify(draft)).catch(() => {
+      // non-blocking
+    });
+  }, [currentStep, quitType, dailyAmount, costPerUnit, currency, nicotineStrength, weightGoal]);
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -86,6 +139,7 @@ export default function QuitOnboardingScreen() {
     };
 
     await saveQuitProfile(profile);
+    await AsyncStorage.removeItem(QUIT_ONBOARDING_DRAFT_KEY);
     // Quit tab lives inside Main tabs; navigate through parent route.
     navigation.navigate('Main', { screen: 'Quit' });
   };

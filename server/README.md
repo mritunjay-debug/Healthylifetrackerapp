@@ -17,6 +17,9 @@ Serverless **Node.js / TypeScript** API deployed on **Vercel**, backed by **Supa
 | `GET` | `/api/health` | No | Liveness check |
 | `POST` | `/api/auth/signup` | No | `{ "email", "password" }` → user + session (if confirmations off) |
 | `POST` | `/api/auth/login` | No | `{ "email", "password" }` → user + session |
+| `POST` | `/api/notifications/push-test` | No | `{ "token" }` → send test push via Expo |
+| `POST` | `/api/notifications/token` | Bearer | Sync current user Expo push token |
+| `POST` | `/api/notifications/send-self` | Bearer | Send remote push reminder to current user tokens |
 | `GET` | `/api/items` | Bearer | List current user’s rows in `app_items` |
 | `POST` | `/api/items` | Bearer | `{ "title", "body?" }` → create |
 | `GET` | `/api/items/:id` | Bearer | Read one |
@@ -82,7 +85,7 @@ Use `session.access_token` from signup/login (or from Supabase client `getSessio
    | `SUPABASE_URL` | Project URL | Production, Preview, Development |
    | `SUPABASE_ANON_KEY` | `anon` `public` key | All |
 
-   Optional (only if you add admin routes):
+   Optional (recommended for frictionless signup without email confirmation):
 
    | `SUPABASE_SERVICE_ROLE_KEY` | `service_role` secret | Production only (recommended) |
 

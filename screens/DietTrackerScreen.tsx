@@ -1,25 +1,117 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { LineChart } from 'react-native-chart-kit';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
 import { getDietLogs, saveDietLogs } from '../lib/storage';
 import { DietLog } from '../lib/types';
-import { getAppPreferences } from '../lib/appPreferences';
-import { LineChart } from 'react-native-chart-kit';
 
 type Sex = 'male' | 'female';
-type Activity = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+type Activity = 'easy' | 'balanced' | 'high';
 type Goal = 'maintain' | 'lose' | 'gain';
-type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
-type Formula = 'mifflin' | 'harris' | 'katch';
+type DietPreference = 'veg' | 'egg' | 'nonveg' | 'vegan';
+type MenuStyle = 'indian' | 'global';
 
-const activityMultipliers: Record<Activity, number> = {
-  sedentary: 1.2,
-  light: 1.375,
-  moderate: 1.55,
-  active: 1.725,
-  very_active: 1.9,
+type DietProfile = {
+  name: string;
+  sex: Sex;
+  age: string;
+  height: string;
+  weight: string;
+  activity: Activity;
+  goal: Goal;
+  preference: DietPreference;
+  menuStyle: MenuStyle;
+};
+
+const PROFILE_KEY = '@diet_profile_v2';
+
+const defaultProfile: DietProfile = {
+  name: '',
+  sex: 'male',
+  age: '25',
+  height: '170',
+  weight: '70',
+  activity: 'balanced',
+  goal: 'maintain',
+  preference: 'veg',
+  menuStyle: 'indian',
+};
+
+const activityMultiplier: Record<Activity, number> = {
+  easy: 1.35,
+  balanced: 1.55,
+  high: 1.78,
+};
+
+const mealIdeas: Record<
+  MenuStyle,
+  Record<DietPreference, { breakfast: string; lunch: string; snack: string; dinner: string }>
+> = {
+  indian: {
+    veg: {
+      breakfast: 'Poha/upma + curd + fruit',
+      lunch: 'Dal + rice + sabzi + salad',
+      snack: 'Roasted chana + chaas',
+      dinner: 'Paneer/tofu + 2 roti + sabzi',
+    },
+    egg: {
+      breakfast: '2-3 boiled eggs + veg poha',
+      lunch: 'Egg curry + rice + salad',
+      snack: 'Dahi + nuts',
+      dinner: 'Egg bhurji + 2 roti + sabzi',
+    },
+    nonveg: {
+      breakfast: 'Masala omelette + toast + fruit',
+      lunch: 'Grilled chicken + rice + sabzi',
+      snack: 'Greek yogurt + peanuts',
+      dinner: 'Fish/chicken curry + 2 roti + salad',
+    },
+    vegan: {
+      breakfast: 'Moong chilla + coconut chutney',
+      lunch: 'Rajma/chole + brown rice + salad',
+      snack: 'Peanut chaat + lemon water',
+      dinner: 'Tofu bhurji + millet roti + sabzi',
+    },
+  },
+  global: {
+    veg: {
+      breakfast: 'Oats bowl + fruit + seeds',
+      lunch: 'Lentil bowl + quinoa + greens',
+      snack: 'Roasted nuts + yogurt',
+      dinner: 'Paneer bowl + whole-grain wrap',
+    },
+    egg: {
+      breakfast: 'Egg scramble + toast + fruit',
+      lunch: 'Egg rice bowl + vegetables',
+      snack: 'Greek yogurt + nuts',
+      dinner: 'Egg wrap + sauteed veggies',
+    },
+    nonveg: {
+      breakfast: 'Omelette + toast + fruit',
+      lunch: 'Chicken bowl + rice + vegetables',
+      snack: 'Yogurt + nuts',
+      dinner: 'Fish/chicken + salad + wrap',
+    },
+    vegan: {
+      breakfast: 'Tofu scramble + toast + fruit',
+      lunch: 'Chickpea bowl + millet',
+      snack: 'Hummus + carrots + nuts',
+      dinner: 'Tofu stir fry + quinoa',
+    },
+  },
 };
 
 export default function DietTrackerScreen() {
@@ -28,288 +120,207 @@ export default function DietTrackerScreen() {
   const c = tokens.colors;
   const { width } = useWindowDimensions();
 
-  const [sex, setSex] = useState<Sex>('male');
-  const [formula, setFormula] = useState<Formula>('mifflin');
-  const [activity, setActivity] = useState<Activity>('moderate');
-  const [goal, setGoal] = useState<Goal>('maintain');
-  const [age, setAge] = useState('25');
-  const [heightCm, setHeightCm] = useState('170');
-  const [weightKg, setWeightKg] = useState('70');
-  const [consumedCalories, setConsumedCalories] = useState('');
-  const [waterGlasses, setWaterGlasses] = useState('0');
-
-  const [todayLog, setTodayLog] = useState<DietLog | null>(null);
-  const [currencySymbol, setCurrencySymbol] = useState('₹');
-  const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
-  const [distanceUnit, setDistanceUnit] = useState<'km' | 'mi'>('km');
-  const [weeklyLogs, setWeeklyLogs] = useState<DietLog[]>([]);
-  const [foodName, setFoodName] = useState('');
-  const [foodCalories, setFoodCalories] = useState('');
-  const [foodProtein, setFoodProtein] = useState('');
-  const [foodCarbs, setFoodCarbs] = useState('');
-  const [foodFat, setFoodFat] = useState('');
-  const [mealType, setMealType] = useState<MealType>('breakfast');
-  const [bodyFatPct, setBodyFatPct] = useState('20');
+  const [profile, setProfile] = useState<DietProfile>(defaultProfile);
+  const [logs, setLogs] = useState<DietLog[]>([]);
+  const [intake, setIntake] = useState('');
+  const [water, setWater] = useState('0');
+  const [todayWeight, setTodayWeight] = useState('');
 
   useEffect(() => {
-    loadTodayLog();
-    getAppPreferences().then((prefs) => {
-      setCurrencySymbol(prefs.currencySymbol || '₹');
-      setWeightUnit(prefs.weightUnit);
-      setDistanceUnit(prefs.distanceUnit);
-    });
+    loadAll();
   }, []);
 
-  const loadTodayLog = async () => {
-    const logs = await getDietLogs();
+  const loadAll = async () => {
+    const [stored, dietLogs] = await Promise.all([
+      AsyncStorage.getItem(PROFILE_KEY),
+      getDietLogs(),
+    ]);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as DietProfile;
+        setProfile({ ...defaultProfile, ...parsed });
+      } catch {
+        // ignore invalid saved profile
+      }
+    }
+    setLogs(dietLogs.sort((a, b) => a.date.localeCompare(b.date)));
     const today = new Date().toISOString().split('T')[0];
-    const found = logs.find((l) => l.date === today) ?? null;
-    const last7 = [...logs]
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-7);
-    setWeeklyLogs(last7);
-    setTodayLog(found);
-    if (found?.calories != null) setConsumedCalories(String(found.calories));
-    if (found?.waterGlasses != null) setWaterGlasses(String(found.waterGlasses));
+    const todayLog = dietLogs.find((l) => l.date === today);
+    if (todayLog?.calories != null) setIntake(String(todayLog.calories));
+    if (todayLog?.waterGlasses != null) setWater(String(todayLog.waterGlasses));
+    if (todayLog?.weight != null) setTodayWeight(String(todayLog.weight));
   };
 
-  const targets = useMemo(() => {
-    const ageN = parseInt(age) || 0;
-    const h = parseFloat(heightCm) || 0;
-    const rawW = parseFloat(weightKg) || 0;
-    const w = weightUnit === 'lb' ? rawW * 0.453592 : rawW;
-    if (ageN <= 0 || h <= 0 || w <= 0) {
-      return { bmr: 0, tdee: 0, target: 0 };
+  const updateProfile = async (next: Partial<DietProfile>) => {
+    const merged = { ...profile, ...next };
+    setProfile(merged);
+    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(merged));
+  };
+
+  const calc = useMemo(() => {
+    const age = parseInt(profile.age, 10) || 0;
+    const height = parseFloat(profile.height) || 0;
+    const weight = parseFloat(profile.weight) || 0;
+    if (age <= 0 || height <= 0 || weight <= 0) {
+      return { bmr: 0, baseline: 0, budget: 0, protein: 0, carbs: 0, fat: 0 };
     }
 
-    const bf = Math.max(0, Math.min(60, parseFloat(bodyFatPct) || 0)) / 100;
-    let bmr = sex === 'male' ? 10 * w + 6.25 * h - 5 * ageN + 5 : 10 * w + 6.25 * h - 5 * ageN - 161;
-    if (formula === 'harris') {
-      bmr =
-        sex === 'male'
-          ? 13.397 * w + 4.799 * h - 5.677 * ageN + 88.362
-          : 9.247 * w + 3.098 * h - 4.33 * ageN + 447.593;
-    } else if (formula === 'katch') {
-      bmr = 370 + 21.6 * (1 - bf) * w;
-    }
+    const bmr =
+      profile.sex === 'male'
+        ? 10 * weight + 6.25 * height - 5 * age + 5
+        : 10 * weight + 6.25 * height - 5 * age - 161;
+    const baseline = bmr * activityMultiplier[profile.activity];
+    const budget =
+      profile.goal === 'lose'
+        ? baseline - 420
+        : profile.goal === 'gain'
+        ? baseline + 280
+        : baseline;
+    const finalBudget = Math.max(1200, Math.round(budget));
 
-    const tdee = bmr * activityMultipliers[activity];
-    const target = goal === 'lose' ? tdee - 400 : goal === 'gain' ? tdee + 300 : tdee;
-    return { bmr, tdee, target: Math.max(1200, target) };
-  }, [age, heightCm, weightKg, weightUnit, sex, activity, goal, formula, bodyFatPct]);
+    const proteinBase = profile.goal === 'gain' ? 1.9 : profile.goal === 'lose' ? 1.8 : 1.6;
+    const protein = Math.round(weight * proteinBase);
+    const fat = Math.round(weight * 0.8);
+    const carbs = Math.max(40, Math.round((finalBudget - protein * 4 - fat * 9) / 4));
 
-  const caloriePlans = useMemo(() => {
-    const maintain = Math.round(targets.tdee);
-    const mild = Math.max(1200, maintain - 250);
-    const loss = Math.max(1200, maintain - 500);
-    const extreme = Math.max(1200, maintain - 1000);
-    return { maintain, mild, loss, extreme };
-  }, [targets.tdee]);
-
-  const weeklyLoss = useMemo(() => {
-    const toKgPerWeek = (dailyDeficit: number) => (dailyDeficit * 7) / 7700;
-    const toLbPerWeek = (dailyDeficit: number) => (dailyDeficit * 7) / 3500;
-    const metric = weightUnit === 'kg' && distanceUnit === 'km';
-    const unit = metric ? 'kg/week' : 'lb/week';
-    const fmt = (v: number) => v.toFixed(1);
     return {
-      unit,
-      mild: fmt(metric ? toKgPerWeek(250) : toLbPerWeek(250)),
-      loss: fmt(metric ? toKgPerWeek(500) : toLbPerWeek(500)),
-      extreme: fmt(metric ? toKgPerWeek(1000) : toLbPerWeek(1000)),
+      bmr: Math.round(bmr),
+      baseline: Math.round(baseline),
+      budget: finalBudget,
+      protein,
+      carbs,
+      fat,
     };
-  }, [weightUnit, distanceUnit]);
+  }, [profile]);
 
-  const zigzag = useMemo(() => {
-    const { maintain, mild, loss, extreme } = caloriePlans;
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const s1 = days.map((d, idx) => ({
-      day: d,
-      mild: idx === 0 || idx === 6 ? maintain : Math.max(1200, mild - 100),
-      loss: idx === 0 || idx === 6 ? maintain : Math.max(1200, loss - 100),
-      extreme: idx === 0 || idx === 6 ? Math.max(1200, extreme + 150) : extreme,
+  const todayRemaining = useMemo(() => calc.budget - (parseInt(intake, 10) || 0), [calc.budget, intake]);
+
+  const dietTable = useMemo(() => {
+    const split = [
+      { meal: 'Breakfast', ratio: 0.27 },
+      { meal: 'Lunch', ratio: 0.34 },
+      { meal: 'Snack', ratio: 0.12 },
+      { meal: 'Dinner', ratio: 0.27 },
+    ] as const;
+    const ideas = mealIdeas[profile.menuStyle][profile.preference];
+    return split.map((s) => ({
+      meal: s.meal,
+      target: Math.round(calc.budget * s.ratio),
+      protein: Math.round(calc.protein * s.ratio),
+      idea:
+        s.meal === 'Breakfast'
+          ? ideas.breakfast
+          : s.meal === 'Lunch'
+          ? ideas.lunch
+          : s.meal === 'Snack'
+          ? ideas.snack
+          : ideas.dinner,
     }));
-    return s1;
-  }, [caloriePlans]);
+  }, [calc.budget, calc.protein, profile.preference, profile.menuStyle]);
 
-  const activityImpact = useMemo(() => {
-    // Reference-style exercise impact table scaled by body weight.
-    const rawW = parseFloat(weightKg) || 70;
-    const weightLb = weightUnit === 'lb' ? rawW : rawW * 2.20462;
-    const weightFactor = weightLb / 155;
-    const baseDailyBurn = [200, 650, 1100];
-    const metric = weightUnit === 'kg' && distanceUnit === 'km';
-    const unit = metric ? 'kg/week' : 'lb/week';
-    const convert = (daily: number) => {
-      const scaled = daily * weightFactor;
-      const lbPerWeek = (scaled * 7) / 3500;
-      return metric ? lbPerWeek * 0.453592 : lbPerWeek;
-    };
-    return {
-      unit,
-      rows: [
-        { label: 'Daily exercise, or intense exercise 3-4 times/week', value: convert(baseDailyBurn[0]).toFixed(1) },
-        { label: 'Intense exercise 6-7 times/week', value: convert(baseDailyBurn[1]).toFixed(1) },
-        { label: 'Very intense exercise daily, or highly physical job', value: convert(baseDailyBurn[2]).toFixed(1) },
-      ],
-    };
-  }, [weightKg, weightUnit, distanceUnit]);
+  const weekly = useMemo(() => {
+    const byDate = new Map(logs.map((l) => [l.date, l]));
+    const labels: string[] = [];
+    const intakeData: number[] = [];
+    const budgetData: number[] = [];
+    const weightData: number[] = [];
 
-  const remaining = Math.round(targets.target - (parseInt(consumedCalories) || 0));
-  const bmi = useMemo(() => {
-    const hMeters = (parseFloat(heightCm) || 0) / 100;
-    const rawW = parseFloat(weightKg) || 0;
-    const kg = weightUnit === 'lb' ? rawW * 0.453592 : rawW;
-    if (hMeters <= 0 || kg <= 0) return 0;
-    return kg / (hMeters * hMeters);
-  }, [heightCm, weightKg, weightUnit]);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const date = d.toISOString().split('T')[0];
+      const row = byDate.get(date);
+      labels.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
+      intakeData.push(row?.calories ?? 0);
+      budgetData.push(row?.targetCalories ?? calc.budget);
+      weightData.push(row?.weight ?? 0);
+    }
+    return { labels, intakeData, budgetData, weightData };
+  }, [logs, calc.budget]);
 
-  const bmiLabel =
-    bmi === 0
-      ? 'n/a'
-      : bmi < 18.5
-      ? 'Underweight'
-      : bmi < 25
-      ? 'Healthy'
-      : bmi < 30
-      ? 'Overweight'
-      : 'Obesity';
+  const quickStats = useMemo(() => {
+    const sorted = [...logs].sort((a, b) => a.date.localeCompare(b.date));
+    const loggedDays = sorted.length;
+    const last7 = sorted.slice(-7);
+    const adherence =
+      last7.length === 0
+        ? 0
+        : Math.round(
+            (last7.reduce((acc, d) => {
+              if (!d.targetCalories || !d.calories) return acc;
+              const deviation = Math.abs(d.calories - d.targetCalories) / Math.max(1, d.targetCalories);
+              return acc + Math.max(0, 1 - deviation);
+            }, 0) /
+              last7.length) *
+              100
+          );
+    const avgIntake =
+      last7.length === 0
+        ? 0
+        : Math.round(last7.reduce((sum, d) => sum + (d.calories ?? 0), 0) / last7.length);
 
-  // Practical macro targets (internet-backed common ranges):
-  // protein ~1.6 g/kg, fat ~0.8 g/kg, remaining from carbs.
-  const macros = useMemo(() => {
-    const rawW = parseFloat(weightKg) || 0;
-    const kg = weightUnit === 'lb' ? rawW * 0.453592 : rawW;
-    if (kg <= 0) return { proteinG: 0, fatG: 0, carbsG: 0 };
-    const proteinG = Math.round(kg * 1.6);
-    const fatG = Math.round(kg * 0.8);
-    const proteinKcal = proteinG * 4;
-    const fatKcal = fatG * 9;
-    const carbsKcal = Math.max(0, Math.round(targets.target - proteinKcal - fatKcal));
-    const carbsG = Math.round(carbsKcal / 4);
-    return { proteinG, fatG, carbsG };
-  }, [targets.target, weightKg, weightUnit]);
+    let streak = 0;
+    const dateSet = new Set(sorted.map((d) => d.date));
+    const cursor = new Date();
+    while (true) {
+      const key = cursor.toISOString().split('T')[0];
+      if (!dateSet.has(key)) break;
+      streak += 1;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return { loggedDays, adherence, avgIntake, streak };
+  }, [logs]);
 
-  const waterTargetMl = useMemo(() => {
-    const rawW = parseFloat(weightKg) || 0;
-    const kg = weightUnit === 'lb' ? rawW * 0.453592 : rawW;
-    if (kg <= 0) return 0;
-    return Math.round(kg * 35); // ~35 ml/kg/day practical target
-  }, [weightKg, weightUnit]);
+  const weightSeries = useMemo(() => {
+    let last = 0;
+    return weekly.weightData.map((v) => {
+      const next = Number.isFinite(v) && v > 0 ? v : last;
+      if (next > 0) last = next;
+      return next;
+    });
+  }, [weekly.weightData]);
+
+  const weightInsight = useMemo(() => {
+    const points = logs
+      .filter((l) => typeof l.weight === 'number')
+      .slice(-10)
+      .map((l) => l.weight as number);
+    if (points.length < 2) return 'Add weight for a few days to unlock trend insight.';
+    const delta = points[points.length - 1] - points[0];
+    if (Math.abs(delta) < 0.2) return 'Stable trend: your weight is holding steady.';
+    return delta < 0
+      ? `Down trend detected: ${Math.abs(delta).toFixed(1)} moved down in recent check-ins.`
+      : `Up trend detected: ${delta.toFixed(1)} moved up in recent check-ins.`;
+  }, [logs]);
+
+  const personalHeadline = profile.name.trim()
+    ? `${profile.name.trim()}, your plan is tuned for you`
+    : 'Your plan is tuned for you';
 
   const saveToday = async () => {
     const today = new Date().toISOString().split('T')[0];
-    const logs = await getDietLogs();
-    const mealEntries = todayLog?.mealEntries ?? [];
-    const caloriesFromMeals = mealEntries.reduce((sum, m) => sum + m.calories, 0);
-    const proteinFromMeals = mealEntries.reduce((sum, m) => sum + m.proteinG, 0);
-    const carbsFromMeals = mealEntries.reduce((sum, m) => sum + m.carbsG, 0);
-    const fatFromMeals = mealEntries.reduce((sum, m) => sum + m.fatG, 0);
-    const nextLog: DietLog = {
-      id: todayLog?.id ?? `diet-${Date.now()}`,
+    const next: DietLog = {
+      id: `diet-${today}`,
       date: today,
-      calories: (parseInt(consumedCalories) || 0) + caloriesFromMeals,
-      targetCalories: Math.round(targets.target),
-      proteinG: proteinFromMeals,
-      carbsG: carbsFromMeals,
-      fatG: fatFromMeals,
-      waterGlasses: parseInt(waterGlasses) || 0,
-      mood: todayLog?.mood ?? 3,
-      energy: todayLog?.energy ?? 3,
-      wins: todayLog?.wins ?? [],
-      challenges: todayLog?.challenges ?? [],
-      weight: parseFloat(weightKg) || undefined,
-      mealEntries,
-    };
-
-    const filtered = logs.filter((l) => l.date !== today);
-    await saveDietLogs([...filtered, nextLog]);
-    setTodayLog(nextLog);
-    await loadTodayLog();
-    Alert.alert('Saved', 'Diet log updated for today.');
-  };
-
-  const addMealEntry = async () => {
-    if (!foodName.trim()) {
-      Alert.alert('Food name required', 'Enter a food item name.');
-      return;
-    }
-    const newEntry = {
-      id: `meal-${Date.now()}`,
-      meal: mealType,
-      name: foodName.trim(),
-      calories: parseInt(foodCalories) || 0,
-      proteinG: parseInt(foodProtein) || 0,
-      carbsG: parseInt(foodCarbs) || 0,
-      fatG: parseInt(foodFat) || 0,
-      timestamp: new Date().toISOString(),
-    };
-    const current = todayLog ?? {
-      id: `diet-${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
+      calories: parseInt(intake, 10) || 0,
+      targetCalories: calc.budget,
+      proteinG: calc.protein,
+      carbsG: calc.carbs,
+      fatG: calc.fat,
+      waterGlasses: parseInt(water, 10) || 0,
+      weight: parseFloat(todayWeight) || undefined,
       mood: 3,
       energy: 3,
       wins: [],
       challenges: [],
       mealEntries: [],
     };
-    const nextLog: DietLog = {
-      ...current,
-      mealEntries: [...(current.mealEntries ?? []), newEntry],
-    };
-    const logs = await getDietLogs();
-    const filtered = logs.filter((l) => l.date !== nextLog.date);
-    await saveDietLogs([...filtered, nextLog]);
-    setTodayLog(nextLog);
-    setFoodName('');
-    setFoodCalories('');
-    setFoodProtein('');
-    setFoodCarbs('');
-    setFoodFat('');
-    await loadTodayLog();
+    const remaining = logs.filter((l) => l.date !== today);
+    const updated = [...remaining, next].sort((a, b) => a.date.localeCompare(b.date));
+    await saveDietLogs(updated);
+    setLogs(updated);
+    Alert.alert('Saved', 'Your personalized diet day has been saved.');
   };
-
-  const macroAdherence = useMemo(() => {
-    const p = todayLog?.proteinG ?? 0;
-    const cbs = todayLog?.carbsG ?? 0;
-    const f = todayLog?.fatG ?? 0;
-    const proteinPct = macros.proteinG > 0 ? Math.min(100, Math.round((p / macros.proteinG) * 100)) : 0;
-    const carbsPct = macros.carbsG > 0 ? Math.min(100, Math.round((cbs / macros.carbsG) * 100)) : 0;
-    const fatPct = macros.fatG > 0 ? Math.min(100, Math.round((f / macros.fatG) * 100)) : 0;
-    return { proteinPct, carbsPct, fatPct };
-  }, [todayLog?.proteinG, todayLog?.carbsG, todayLog?.fatG, macros.proteinG, macros.carbsG, macros.fatG]);
-
-  const suggestions = useMemo(() => {
-    const tips: string[] = [];
-    if ((todayLog?.proteinG ?? 0) < macros.proteinG * 0.7) tips.push('High protein needed: add eggs, paneer, tofu, chicken, or dal.');
-    if ((parseInt(waterGlasses) || 0) * 250 < waterTargetMl * 0.7) tips.push('Hydrate now: drink 2 glasses in next 60 minutes.');
-    const dinnerCalories = (todayLog?.mealEntries ?? [])
-      .filter((m) => m.meal === 'dinner')
-      .reduce((sum, m) => sum + m.calories, 0);
-    const totalCal = (todayLog?.calories ?? 0);
-    if (totalCal > 0 && dinnerCalories / totalCal > 0.45) {
-      tips.push('Reduce evening calorie density: shift some calories to breakfast/lunch.');
-    }
-    if (tips.length === 0) tips.push('Great balance today. Keep consistency and pre-log tomorrow meals.');
-    return tips;
-  }, [todayLog, macros.proteinG, waterGlasses, waterTargetMl]);
-
-  const weeklyChart = useMemo(() => {
-    const logsByDate = new Map(weeklyLogs.map((l) => [l.date, l]));
-    const labels: string[] = [];
-    const calories: number[] = [];
-    const targetsData: number[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
-      const l = logsByDate.get(key);
-      labels.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
-      calories.push(l?.calories ?? 0);
-      targetsData.push(l?.targetCalories ?? Math.round(targets.target));
-    }
-    return { labels, calories, targetsData };
-  }, [weeklyLogs, targets.target]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
@@ -318,164 +329,184 @@ export default function DietTrackerScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.85}>
             <Ionicons name="chevron-back" size={24} color={c.text} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: c.text }]}>Diet Tracker</Text>
+          <Text style={[styles.title, { color: c.text }]}>Calorie & Diet Studio</Text>
           <View style={{ width: 24 }} />
         </View>
 
         <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>Calorie Calculator</Text>
-          <Text style={[styles.cardSub, { color: c.mutedText }]}>Aligned with mainstream calorie calculator methods</Text>
-
-          <Text style={[styles.metric, { color: c.text, marginBottom: 6 }]}>Gender</Text>
-          <View style={styles.row}>
-            <Pill label="Male" active={sex === 'male'} onPress={() => setSex('male')} />
-            <Pill label="Female" active={sex === 'female'} onPress={() => setSex('female')} />
+          <Text style={[styles.cardTitle, { color: c.text }]}>{personalHeadline}</Text>
+          <Text style={[styles.cardSub, { color: c.mutedText }]}>
+            Personal profile drives your daily budget and meal table.
+          </Text>
+          <View style={styles.metricGrid}>
+            <MetricTile label="Logged Days" value={String(quickStats.loggedDays)} color={c.primary} />
+            <MetricTile label="Current Streak" value={String(quickStats.streak)} color={c.success} />
+            <MetricTile label="Adherence %" value={String(quickStats.adherence)} color={c.accent} />
           </View>
 
-          <Text style={[styles.metric, { color: c.text, marginBottom: 6 }]}>Formula</Text>
+          <TextInput
+            value={profile.name}
+            onChangeText={(v) => updateProfile({ name: v })}
+            placeholder="Your name"
+            placeholderTextColor={c.mutedText}
+            style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]}
+          />
           <View style={styles.row}>
-            <Pill label="Mifflin" active={formula === 'mifflin'} onPress={() => setFormula('mifflin')} />
-            <Pill label="Harris" active={formula === 'harris'} onPress={() => setFormula('harris')} />
-            <Pill label="Katch" active={formula === 'katch'} onPress={() => setFormula('katch')} />
-          </View>
-          {formula === 'katch' ? (
             <TextInput
-              style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]}
-              value={bodyFatPct}
-              onChangeText={setBodyFatPct}
-              keyboardType="decimal-pad"
-              placeholder="Body fat % (for Katch)"
+              value={profile.age}
+              onChangeText={(v) => updateProfile({ age: v })}
+              placeholder="Age"
               placeholderTextColor={c.mutedText}
+              keyboardType="number-pad"
+              style={[styles.input, styles.half, { color: c.text, backgroundColor: c.surfaceElevated }]}
             />
-          ) : null}
-
-          <TextInput style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]} value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="Age (years)" placeholderTextColor={c.mutedText} />
-          <TextInput style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]} value={heightCm} onChangeText={setHeightCm} keyboardType="decimal-pad" placeholder="Height (cm)" placeholderTextColor={c.mutedText} />
-          <TextInput style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]} value={weightKg} onChangeText={setWeightKg} keyboardType="decimal-pad" placeholder={`Weight (${weightUnit})`} placeholderTextColor={c.mutedText} />
-
-          <View style={styles.row}>
-            <Pill label="Sedentary" active={activity === 'sedentary'} onPress={() => setActivity('sedentary')} />
-            <Pill label="Light" active={activity === 'light'} onPress={() => setActivity('light')} />
-            <Pill label="Moderate" active={activity === 'moderate'} onPress={() => setActivity('moderate')} />
+            <TextInput
+              value={profile.height}
+              onChangeText={(v) => updateProfile({ height: v })}
+              placeholder="Height"
+              placeholderTextColor={c.mutedText}
+              keyboardType="decimal-pad"
+              style={[styles.input, styles.half, { color: c.text, backgroundColor: c.surfaceElevated }]}
+            />
           </View>
+          <TextInput
+            value={profile.weight}
+            onChangeText={(v) => updateProfile({ weight: v })}
+            placeholder="Current weight"
+            placeholderTextColor={c.mutedText}
+            keyboardType="decimal-pad"
+            style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]}
+          />
+
+          <Text style={[styles.sectionLabel, { color: c.text }]}>Activity</Text>
           <View style={styles.row}>
-            <Pill label="Active" active={activity === 'active'} onPress={() => setActivity('active')} />
-            <Pill label="Very Active" active={activity === 'very_active'} onPress={() => setActivity('very_active')} />
+            <Pill label="Easy" active={profile.activity === 'easy'} onPress={() => updateProfile({ activity: 'easy' })} />
+            <Pill label="Balanced" active={profile.activity === 'balanced'} onPress={() => updateProfile({ activity: 'balanced' })} />
+            <Pill label="High" active={profile.activity === 'high'} onPress={() => updateProfile({ activity: 'high' })} />
           </View>
 
+          <Text style={[styles.sectionLabel, { color: c.text }]}>Goal</Text>
           <View style={styles.row}>
-            <Pill label="Maintain" active={goal === 'maintain'} onPress={() => setGoal('maintain')} />
-            <Pill label="Lose" active={goal === 'lose'} onPress={() => setGoal('lose')} />
-            <Pill label="Gain" active={goal === 'gain'} onPress={() => setGoal('gain')} />
+            <Pill label="Maintain" active={profile.goal === 'maintain'} onPress={() => updateProfile({ goal: 'maintain' })} />
+            <Pill label="Fat Loss" active={profile.goal === 'lose'} onPress={() => updateProfile({ goal: 'lose' })} />
+            <Pill label="Lean Gain" active={profile.goal === 'gain'} onPress={() => updateProfile({ goal: 'gain' })} />
           </View>
 
-          <Text style={[styles.metric, { color: c.text }]}>BMR: {Math.round(targets.bmr)} kcal</Text>
-          <Text style={[styles.metric, { color: c.text }]}>TDEE: {Math.round(targets.tdee)} kcal</Text>
-          <Text style={[styles.metricStrong, { color: c.primary }]}>Daily target: {Math.round(targets.target)} kcal</Text>
-          <Text style={[styles.metric, { color: c.text }]}>BMI: {bmi.toFixed(1)} ({bmiLabel})</Text>
+          <Text style={[styles.sectionLabel, { color: c.text }]}>Food Preference</Text>
+          <View style={styles.row}>
+            <Pill label="Veg" active={profile.preference === 'veg'} onPress={() => updateProfile({ preference: 'veg' })} />
+            <Pill label="Egg" active={profile.preference === 'egg'} onPress={() => updateProfile({ preference: 'egg' })} />
+            <Pill label="Non-veg" active={profile.preference === 'nonveg'} onPress={() => updateProfile({ preference: 'nonveg' })} />
+            <Pill label="Vegan" active={profile.preference === 'vegan'} onPress={() => updateProfile({ preference: 'vegan' })} />
+          </View>
+
+          <Text style={[styles.sectionLabel, { color: c.text }]}>Menu Style</Text>
+          <View style={styles.row}>
+            <Pill
+              label="Indian Menu"
+              active={profile.menuStyle === 'indian'}
+              onPress={() => updateProfile({ menuStyle: 'indian' })}
+            />
+            <Pill
+              label="Global Menu"
+              active={profile.menuStyle === 'global'}
+              onPress={() => updateProfile({ menuStyle: 'global' })}
+            />
+          </View>
         </View>
 
         <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>Calorie Plans</Text>
-          <Text style={[styles.metric, { color: c.text }]}>Maintain: {caloriePlans.maintain} kcal/day</Text>
-          <Text style={[styles.metric, { color: c.text }]}>Mild loss (~{weeklyLoss.mild} {weeklyLoss.unit}): {caloriePlans.mild} kcal/day</Text>
-          <Text style={[styles.metric, { color: c.text }]}>Loss (~{weeklyLoss.loss} {weeklyLoss.unit}): {caloriePlans.loss} kcal/day</Text>
-          <Text style={[styles.metric, { color: c.text }]}>Extreme (~{weeklyLoss.extreme} {weeklyLoss.unit}): {caloriePlans.extreme} kcal/day</Text>
-          <Text style={[styles.cardSub, { color: c.mutedText, marginTop: 8 }]}>
-            Safer range is usually up to ~1000 kcal/day deficit. Adjust with medical guidance when needed.
+          <Text style={[styles.cardTitle, { color: c.text }]}>Smart Calculation</Text>
+          <View style={styles.metricGrid}>
+            <MetricTile label="BMR" value={String(calc.bmr)} color={c.text} />
+            <MetricTile label="Baseline" value={String(calc.baseline)} color={c.info} />
+            <MetricTile label="Daily Budget" value={String(calc.budget)} color={c.primary} />
+          </View>
+          <View style={styles.metricGrid}>
+            <MetricTile label="Protein" value={String(calc.protein)} color={c.success} />
+            <MetricTile label="Carbs" value={String(calc.carbs)} color={c.accent} />
+            <MetricTile label="Fat" value={String(calc.fat)} color={'#f59e0b'} />
+          </View>
+          <Text style={[styles.cardSub, { color: c.mutedText, marginBottom: 0 }]}>
+            Results intentionally shown without unit suffix for a cleaner reading experience.
           </Text>
         </View>
 
         <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>Zigzag Calorie Cycling (Sample)</Text>
-          {zigzag.map((d) => (
-            <Text key={d.day} style={[styles.metric, { color: c.mutedText }]}>
-              {d.day}: mild {d.mild} · loss {d.loss} · extreme {d.extreme}
-            </Text>
-          ))}
-        </View>
-
-        <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>Activity Impact Table</Text>
-          <Text style={[styles.cardSub, { color: c.mutedText }]}>Estimated additional weight loss with higher activity</Text>
+          <Text style={[styles.cardTitle, { color: c.text }]}>Personalized Diet Table</Text>
+          <Text style={[styles.cardSub, { color: c.mutedText }]}>
+            Customized by your goal + preference + daily budget.
+          </Text>
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeadText, { color: c.text, flex: 1.6 }]}>Activity level</Text>
-            <Text style={[styles.tableHeadText, { color: c.text, flex: 0.8, textAlign: 'right' }]}>Weight lost/{activityImpact.unit}</Text>
+            <Text style={[styles.tableHead, { color: c.text, flex: 1 }]}>Meal</Text>
+            <Text style={[styles.tableHead, { color: c.text, width: 70, textAlign: 'right' }]}>Target</Text>
+            <Text style={[styles.tableHead, { color: c.text, width: 70, textAlign: 'right' }]}>Protein</Text>
           </View>
-          {activityImpact.rows.map((row, idx) => (
-            <View key={`${row.label}-${idx}`} style={[styles.tableRow, { borderColor: c.border }]}>
-              <Text style={[styles.tableCellText, { color: c.mutedText, flex: 1.6 }]}>{row.label}</Text>
-              <Text style={[styles.tableCellValue, { color: c.primary, flex: 0.8, textAlign: 'right' }]}>{row.value}</Text>
+          {dietTable.map((row) => (
+            <View key={row.meal} style={[styles.tableRow, { borderColor: c.border }]}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={[styles.tableMeal, { color: c.text }]}>{row.meal}</Text>
+                <Text style={[styles.tableIdea, { color: c.mutedText }]}>{row.idea}</Text>
+              </View>
+              <Text style={[styles.tableValue, { color: c.primary, width: 70, textAlign: 'right' }]}>{row.target}</Text>
+              <Text style={[styles.tableValue, { color: c.success, width: 70, textAlign: 'right' }]}>{row.protein}</Text>
             </View>
           ))}
         </View>
 
         <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>Smart Daily Targets</Text>
-          <Text style={[styles.metric, { color: c.text }]}>Protein: {macros.proteinG} g</Text>
-          <Text style={[styles.metric, { color: c.text }]}>Fat: {macros.fatG} g</Text>
-          <Text style={[styles.metric, { color: c.text }]}>Carbs: {macros.carbsG} g</Text>
-          <Text style={[styles.metric, { color: c.info }]}>Water target: {waterTargetMl} ml/day</Text>
-          <Text style={[styles.cardSub, { color: c.mutedText, marginTop: 6 }]}>
-            Meal split idea: Breakfast 25% • Lunch 35% • Dinner 30% • Snacks 10%
+          <Text style={[styles.cardTitle, { color: c.text }]}>Today Check-in</Text>
+          <TextInput
+            value={intake}
+            onChangeText={setIntake}
+            keyboardType="number-pad"
+            placeholder="Total intake today"
+            placeholderTextColor={c.mutedText}
+            style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]}
+          />
+          <View style={styles.row}>
+            <TextInput
+              value={water}
+              onChangeText={setWater}
+              keyboardType="number-pad"
+              placeholder="Water glasses"
+              placeholderTextColor={c.mutedText}
+              style={[styles.input, styles.half, { color: c.text, backgroundColor: c.surfaceElevated }]}
+            />
+            <TextInput
+              value={todayWeight}
+              onChangeText={setTodayWeight}
+              keyboardType="decimal-pad"
+              placeholder="Weight check-in"
+              placeholderTextColor={c.mutedText}
+              style={[styles.input, styles.half, { color: c.text, backgroundColor: c.surfaceElevated }]}
+            />
+          </View>
+          <Text style={[styles.balance, { color: todayRemaining >= 0 ? c.success : c.danger }]}>
+            {todayRemaining >= 0 ? `${todayRemaining} left for today` : `${Math.abs(todayRemaining)} above today`}
           </Text>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>Today Log</Text>
-          <TextInput style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]} value={consumedCalories} onChangeText={setConsumedCalories} keyboardType="number-pad" placeholder="Calories consumed today" placeholderTextColor={c.mutedText} />
-          <TextInput style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]} value={waterGlasses} onChangeText={setWaterGlasses} keyboardType="number-pad" placeholder="Water glasses" placeholderTextColor={c.mutedText} />
-
-          <Text style={[styles.metricStrong, { color: remaining >= 0 ? c.success : c.danger }]}>
-            {remaining >= 0 ? `${remaining} kcal remaining` : `${Math.abs(remaining)} kcal over target`}
-          </Text>
-          <Text style={[styles.metric, { color: c.mutedText }]}>
-            Approx food budget marker: {currencySymbol}{Math.max(0, Math.round((parseInt(consumedCalories) || 0) * 0.01))}
-          </Text>
-
           <TouchableOpacity style={[styles.saveButton, { backgroundColor: c.primary }]} onPress={saveToday} activeOpacity={0.85}>
-            <Text style={styles.saveText}>Save Today</Text>
+            <Text style={styles.saveText}>Save Personalized Day</Text>
           </TouchableOpacity>
         </View>
 
         <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>Food Item Quick Logger (Meal-wise)</Text>
-          <View style={styles.row}>
-            {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((m) => (
-              <Pill key={m} label={m} active={mealType === m} onPress={() => setMealType(m)} />
-            ))}
-          </View>
-          <TextInput style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]} value={foodName} onChangeText={setFoodName} placeholder="Food item name" placeholderTextColor={c.mutedText} />
-          <View style={styles.row}>
-            <TextInput style={[styles.input, styles.half, { color: c.text, backgroundColor: c.surfaceElevated }]} value={foodCalories} onChangeText={setFoodCalories} keyboardType="number-pad" placeholder="kcal" placeholderTextColor={c.mutedText} />
-            <TextInput style={[styles.input, styles.half, { color: c.text, backgroundColor: c.surfaceElevated }]} value={foodProtein} onChangeText={setFoodProtein} keyboardType="number-pad" placeholder="Protein g" placeholderTextColor={c.mutedText} />
-          </View>
-          <View style={styles.row}>
-            <TextInput style={[styles.input, styles.half, { color: c.text, backgroundColor: c.surfaceElevated }]} value={foodCarbs} onChangeText={setFoodCarbs} keyboardType="number-pad" placeholder="Carbs g" placeholderTextColor={c.mutedText} />
-            <TextInput style={[styles.input, styles.half, { color: c.text, backgroundColor: c.surfaceElevated }]} value={foodFat} onChangeText={setFoodFat} keyboardType="number-pad" placeholder="Fat g" placeholderTextColor={c.mutedText} />
-          </View>
-          <TouchableOpacity style={[styles.saveButton, { backgroundColor: c.success }]} onPress={addMealEntry} activeOpacity={0.85}>
-            <Text style={styles.saveText}>Add Food Entry</Text>
-          </TouchableOpacity>
-          <Text style={[styles.cardSub, { color: c.mutedText, marginTop: 10 }]}>
-            Entries today: {(todayLog?.mealEntries ?? []).length}
+          <Text style={[styles.cardTitle, { color: c.text }]}>Progress Visualization</Text>
+          <Text style={[styles.cardSub, { color: c.mutedText }]}>
+            7-day avg intake: {quickStats.avgIntake} • consistency score: {quickStats.adherence}%
           </Text>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>Weekly Diet Analytics</Text>
-          <Text style={[styles.cardSub, { color: c.mutedText }]}>Calories vs Target (Last 7 days)</Text>
+          <Text style={[styles.cardSub, { color: c.mutedText }]}>Intake vs budget</Text>
           <LineChart
             data={{
-              labels: weeklyChart.labels,
+              labels: weekly.labels,
               datasets: [
-                { data: weeklyChart.calories, color: () => c.primary },
-                { data: weeklyChart.targetsData, color: () => c.accent },
+                { data: weekly.intakeData, color: () => c.primary },
+                { data: weekly.budgetData, color: () => c.accent },
               ],
-              legend: ['Calories', 'Target'],
+              legend: ['Intake', 'Budget'],
             }}
-            width={Math.max(280, width - 68)}
-            height={220}
+            width={Math.max(280, width - 70)}
+            height={210}
             chartConfig={{
               backgroundColor: c.surface,
               backgroundGradientFrom: c.surface,
@@ -485,17 +516,51 @@ export default function DietTrackerScreen() {
               labelColor: () => c.text,
             }}
             bezier
-            style={{ borderRadius: 12, marginTop: 8 }}
+            style={{ borderRadius: 12, marginTop: 6 }}
           />
-          <Text style={[styles.metric, { color: c.text, marginTop: 10 }]}>Macro adherence today</Text>
-          <Text style={[styles.metric, { color: c.mutedText }]}>Protein: {macroAdherence.proteinPct}% · Carbs: {macroAdherence.carbsPct}% · Fat: {macroAdherence.fatPct}%</Text>
+
+          <Text style={[styles.cardSub, { color: c.mutedText, marginTop: 16 }]}>Weight movement (fall/gain)</Text>
+          <LineChart
+            data={{
+              labels: weekly.labels,
+              datasets: [{ data: weightSeries, color: () => c.success }],
+              legend: ['Weight'],
+            }}
+            width={Math.max(280, width - 70)}
+            height={190}
+            chartConfig={{
+              backgroundColor: c.surface,
+              backgroundGradientFrom: c.surface,
+              backgroundGradientTo: c.surface,
+              decimalPlaces: 1,
+              color: () => c.success,
+              labelColor: () => c.text,
+            }}
+            bezier
+            style={{ borderRadius: 12, marginTop: 6 }}
+          />
+          <Text style={[styles.insight, { color: c.text }]}>{weightInsight}</Text>
         </View>
 
         <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={[styles.cardTitle, { color: c.text }]}>Auto Suggestions</Text>
-          {suggestions.map((tip, idx) => (
-            <Text key={idx} style={[styles.metric, { color: c.mutedText, lineHeight: 20 }]}>• {tip}</Text>
-          ))}
+          <Text style={[styles.cardTitle, { color: c.text }]}>Recent Logged Days</Text>
+          <Text style={[styles.cardSub, { color: c.mutedText }]}>
+            Quick history of your recent check-ins.
+          </Text>
+          {logs
+            .slice(-10)
+            .reverse()
+            .map((d) => (
+              <View key={d.date} style={[styles.logRow, { borderColor: c.border }]}>
+                <Text style={[styles.logDate, { color: c.text }]}>{d.date}</Text>
+                <Text style={[styles.logMeta, { color: c.mutedText }]}>
+                  Intake {d.calories ?? 0} · Target {d.targetCalories ?? calc.budget} · Weight {d.weight ?? '-'}
+                </Text>
+              </View>
+            ))}
+          {logs.length === 0 ? (
+            <Text style={[styles.cardSub, { color: c.mutedText }]}>No logs yet. Save your first personalized day.</Text>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -506,18 +571,23 @@ function Pill({ label, active, onPress }: { label: string; active: boolean; onPr
   return (
     <TouchableOpacity
       onPress={onPress}
-      style={{
-        borderRadius: 999,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        backgroundColor: active ? '#0EA5E9' : '#1F293710',
-        marginRight: 8,
-        marginBottom: 8,
-      }}
+      style={[
+        styles.pill,
+        { backgroundColor: active ? '#0EA5E9' : '#0f172a12' },
+      ]}
       activeOpacity={0.85}
     >
       <Text style={{ color: active ? '#fff' : '#111827', fontSize: 12, fontWeight: '700' }}>{label}</Text>
     </TouchableOpacity>
+  );
+}
+
+function MetricTile({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <View style={styles.metricTile}>
+      <Text style={[styles.metricValue, { color }]}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
+    </View>
   );
 }
 
@@ -529,37 +599,27 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, borderWidth: 1, padding: 14, marginBottom: 14 },
   cardTitle: { fontSize: 16, fontWeight: '800' },
   cardSub: { fontSize: 12, marginTop: 2, marginBottom: 10 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 2, justifyContent: 'space-between' },
+  row: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   half: { width: '48%' },
-  tableHeader: {
-    flexDirection: 'row',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#00000022',
-  },
-  tableHeadText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  tableCellText: {
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: '600',
-    paddingRight: 8,
-  },
-  tableCellValue: {
-    fontSize: 13,
-    fontWeight: '900',
-  },
   input: { borderRadius: 12, paddingVertical: 12, paddingHorizontal: 12, marginBottom: 10, fontSize: 14 },
-  metric: { fontSize: 13, fontWeight: '700', marginTop: 2 },
-  metricStrong: { fontSize: 16, fontWeight: '900', marginTop: 8 },
+  sectionLabel: { fontSize: 13, fontWeight: '700', marginBottom: 8, marginTop: 4 },
+  pill: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, marginRight: 8, marginBottom: 8 },
+  metricGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  metricTile: { borderRadius: 12, backgroundColor: '#ffffff10', paddingVertical: 10, paddingHorizontal: 10, flex: 1, marginRight: 8 },
+  metricValue: { fontSize: 18, fontWeight: '900' },
+  metricLabel: { color: '#6b7280', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  tableHeader: { flexDirection: 'row', borderBottomWidth: 1, paddingBottom: 8, marginBottom: 4 },
+  tableHead: { fontSize: 12, fontWeight: '800' },
+  tableRow: { flexDirection: 'row', borderBottomWidth: 1, paddingVertical: 9 },
+  tableMeal: { fontSize: 13, fontWeight: '800' },
+  tableIdea: { fontSize: 12, marginTop: 2, lineHeight: 18 },
+  tableValue: { fontSize: 13, fontWeight: '900' },
+  logRow: { borderBottomWidth: 1, paddingVertical: 8 },
+  logDate: { fontSize: 13, fontWeight: '800' },
+  logMeta: { fontSize: 12, marginTop: 2, fontWeight: '600' },
+  balance: { fontSize: 14, fontWeight: '800', marginTop: 2 },
   saveButton: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 12 },
   saveText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  insight: { fontSize: 13, fontWeight: '700', marginTop: 10, lineHeight: 20 },
 });
 

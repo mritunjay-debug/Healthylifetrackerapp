@@ -35,7 +35,22 @@ A comprehensive mobile app for building unbreakable habits with advanced feature
    npm start
    ```
 
+   If you also run the API locally, start it in a separate terminal:
+   ```bash
+   cd server
+   npm run dev:api
+   ```
+   Then return to the repository root before running Expo. Do not run Expo from `server/`.
+
 4. Scan the QR code with Expo Go on your device, then sign in or create an account.
+
+You now land on a welcome screen where account creation is optional. You can continue as guest immediately.
+
+If signup shows a network error on phone, set `EXPO_PUBLIC_API_URL` to your computer LAN IP (example: `http://192.168.1.10:3005`) and restart Expo.
+
+For Google sign-in redirects in Supabase, add:
+- `streakforge://auth/callback` (native/dev build)
+- `https://auth.expo.io/@arcadalabs/agon-preview` (Expo Go)
 
 ## SDK Compatibility
 

@@ -22,11 +22,13 @@
       "@lib/*": [
         "lib/*"
       ]
-    }
+    },
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "api/**/*.ts",
     "lib/**/*.ts"
-  ],
-  "extends": "expo/tsconfig.base"
+  ]
 }

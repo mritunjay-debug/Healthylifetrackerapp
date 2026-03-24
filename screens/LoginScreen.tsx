@@ -20,7 +20,7 @@ import { isOnboarded } from '../lib/storage';
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
   const { tokens } = useTheme();
-  const { signIn, continueAsGuest } = useAuth();
+  const { signIn, continueAsGuest, signInWithGoogle } = useAuth();
   const c = tokens.colors;
 
   const [email, setEmail] = useState('');
@@ -67,6 +67,18 @@ export default function LoginScreen() {
     }
   };
 
+  const onGoogleSignIn = async () => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Google sign in failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: c.background }]}>
       <KeyboardAvoidingView
@@ -108,6 +120,10 @@ export default function LoginScreen() {
           <View style={{ height: 16 }} />
           <PrimaryButton onPress={onSubmit} iconName="log-in-outline">
             {submitting ? 'Signing in…' : 'Sign in'}
+          </PrimaryButton>
+          <View style={{ height: 10 }} />
+          <PrimaryButton onPress={onGoogleSignIn} iconName="logo-google">
+            Continue with Google
           </PrimaryButton>
           {submitting ? (
             <ActivityIndicator style={{ marginTop: 12 }} color={c.primary} />
