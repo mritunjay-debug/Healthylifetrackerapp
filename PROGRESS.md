@@ -39,7 +39,7 @@ This file tracks the “100x UI” redesign progress without requiring you to ru
   - `screens/CravingsLogScreen.tsx`
   - `components/SensorTracker.tsx`
 
-### Phase 3 — Premium Polish + Skeletons
+### Phase 3 — UI Polish + Skeletons
 - [x] Gradient glows added (Home metrics):
   - `components/ui/GradientFill.tsx`
   - `screens/HomeScreen.tsx`
@@ -60,7 +60,7 @@ This file tracks the “100x UI” redesign progress without requiring you to ru
 - Navigation no longer points to missing screens.
 - Dark/light styling is tokenized (centralized palette).
 - Repeated UI patterns are reusable via primitives.
-- Premium polish: gradient glow + skeleton placeholders to reduce “blank/flash” loading.
+- UI polish: gradient glow + skeleton placeholders to reduce “blank/flash” loading.
 
 ## No-Run Verification Loop
 Run these commands after each round of UI edits:

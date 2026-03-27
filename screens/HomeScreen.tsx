@@ -13,13 +13,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { getHabits, saveHabits, getUserStats, saveUserStats, getAchievements, saveAchievements, getDailyChallenges, saveDailyChallenges } from '../lib/storage';
 import { Habit, UserStats, Achievement, DailyChallenge, achievements } from '../lib/types';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import SensorTracker from '../components/SensorTracker';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import ProgressBar from '../components/ui/ProgressBar';
 import GradientFill from '../components/ui/GradientFill';
+import AIAssistCard from '../components/ui/AIAssistCard';
 import { trackEvent } from '../lib/telemetry';
+import { getDietCoachSuggestions } from '../lib/aiCoachApi';
 
 const motivationalQuotes = [
   "You're building something incredible!",
@@ -41,6 +43,9 @@ export default function HomeScreen() {
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>([]);
   const [longestStreak, setLongestStreak] = useState(0);
+  const [aiLines, setAiLines] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSource, setAiSource] = useState<'external' | 'local-fallback' | null>(null);
   const navigation = useNavigation<any>();
   const { isDark, tokens } = useTheme();
   const c = tokens.colors;
@@ -50,6 +55,10 @@ export default function HomeScreen() {
     loadData();
     generateDailyChallenges();
   }, []);
+
+  useEffect(() => {
+    void refreshHomeAi('Give me today priority actions for habits and consistency.');
+  }, [habits.length, longestStreak]);
 
   useEffect(() => {
     trackEvent('screen_view', {
@@ -286,6 +295,25 @@ export default function HomeScreen() {
     setDailyChallenges(challenges);
   };
 
+  const refreshHomeAi = async (focus: string) => {
+    try {
+      setAiLoading(true);
+      const resp = await getDietCoachSuggestions({
+        profile: { name: userStats ? `Level ${userStats.level}` : 'User' },
+        logs: [],
+        budget: 0,
+        todayIntake: 0,
+        context: 'home',
+        focus,
+        payloadSummary: `activeHabits=${activeHabits.length}, longestStreak=${longestStreak}, todayChallenges=${dailyChallenges.length}`,
+      });
+      setAiLines(resp.suggestions);
+      setAiSource(resp.source);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const activeHabits = habits.filter(h => h.currentStreak > 0 || h.completedDates.length > 0);
   const totalStreaks = habits.reduce((sum, h) => sum + h.longestStreak, 0);
   const today = new Date().toISOString().split('T')[0];
@@ -343,7 +371,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
+        <Animated.View entering={FadeInDown.duration(420)} style={styles.header}>
           <View>
             <Text style={[styles.greeting, { color: c.text }]}>Good morning!</Text>
             {userStats && (
@@ -377,9 +405,9 @@ export default function HomeScreen() {
               <Ionicons name="settings-outline" size={24} color={c.text} />
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.streakContainer}>
+        <Animated.View entering={FadeInUp.delay(80).duration(420)} style={styles.streakContainer}>
           <Animated.View style={[styles.streakNumber, animatedStreakStyle]}>
             <GradientFill colors={[c.accent, c.primary]} style={StyleSheet.absoluteFillObject} opacity={0.95} />
             <Text style={[styles.streakText, { color: c.accent }]}>
@@ -387,7 +415,7 @@ export default function HomeScreen() {
             </Text>
           </Animated.View>
           <Text style={[styles.streakLabel, { color: c.mutedText }]}>Longest Streak</Text>
-        </View>
+        </Animated.View>
 
         {userStats && (
           <Card style={{ marginBottom: 20, padding: 14, backgroundColor: 'transparent', overflow: 'hidden' }}>
@@ -406,7 +434,33 @@ export default function HomeScreen() {
           {motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)]}
         </Text>
 
-        <View style={styles.planContainer}>
+        <Animated.View entering={FadeInUp.delay(140).duration(420)}>
+          <AIAssistCard
+            title="AI Daily Command Center"
+            subtitle="Personalized priorities from your current progress."
+            lines={aiLines}
+            loading={aiLoading}
+            source={aiSource}
+            onRefresh={() => refreshHomeAi('Refresh my top 3 actions for today.')}
+            onOpenFullScreen={() =>
+              navigation.navigate('AIAssistant', {
+                title: 'AI Daily Command Center',
+                subtitle: 'Home guidance in full-screen mode',
+                context: 'home',
+                initialFocus: 'Give me today priority actions for habits and consistency.',
+                payloadSummary: `activeHabits=${activeHabits.length}, longestStreak=${longestStreak}, todayChallenges=${dailyChallenges.length}`,
+              })
+            }
+            actions={[
+              { label: 'Focus habits', onPress: () => refreshHomeAi('What habit should I do first now?') },
+              { label: 'Protect streak', onPress: () => refreshHomeAi('How do I protect my streak today?') },
+              { label: '2-min fallback', onPress: () => refreshHomeAi('Give me 2-minute fallback actions.') },
+            ]}
+            colors={c}
+          />
+        </Animated.View>
+
+        <Animated.View entering={FadeInUp.delay(220).duration(420)} style={styles.planContainer}>
           <SectionHeader
             title="Adaptive Daily Plan"
             subtitle="Top 3 actions picked from risk + consistency"
@@ -470,7 +524,7 @@ export default function HomeScreen() {
               </Card>
             ))
           )}
-        </View>
+        </Animated.View>
 
         {dailyChallenges.length > 0 && (
           <View style={styles.challengesContainer}>

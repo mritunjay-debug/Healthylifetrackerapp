@@ -39,7 +39,7 @@ export default async function handler(
     return;
   }
 
-  const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "StreakForge reminder";
+  const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "HealthTrack AI reminder";
   const message =
     typeof body.body === "string" && body.body.trim()
       ? body.body.trim()

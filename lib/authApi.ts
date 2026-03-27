@@ -28,6 +28,20 @@ type GoogleStartResponse = {
   url: string;
 };
 
+function toErrorMessage(value: unknown, fallback: string): string {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const nested =
+      (typeof obj.message === 'string' && obj.message) ||
+      (typeof obj.error === 'string' && obj.error) ||
+      (typeof obj.msg === 'string' && obj.msg) ||
+      '';
+    if (nested.trim()) return nested.trim();
+  }
+  return fallback;
+}
+
 async function postJson<T>(path: string, body: Record<string, string>): Promise<T> {
   const candidates = getApiBaseUrlCandidates();
   let lastError: Error | null = null;
@@ -53,7 +67,10 @@ async function postJson<T>(path: string, body: Record<string, string>): Promise<
 
       if (!res.ok) {
         const err = data as { error?: string; message?: string };
-        const msg = err.error || err.message || `Request failed (${res.status})`;
+        const msg =
+          toErrorMessage(err.error, '') ||
+          toErrorMessage(err.message, '') ||
+          `Request failed (${res.status})`;
         throw new Error(msg);
       }
 
@@ -108,7 +125,7 @@ export async function getUserFromAccessToken(accessToken: string): Promise<AuthU
       });
       const text = await res.text();
       const data = text ? (JSON.parse(text) as { user?: AuthUserPayload; error?: string }) : {};
-      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      if (!res.ok) throw new Error(toErrorMessage(data.error, `Request failed (${res.status})`));
       if (!data.user?.id) throw new Error('Missing user in session response');
       return data.user;
     } catch (e) {
@@ -135,7 +152,7 @@ export async function syncPushTokenToAccount(accessToken: string, pushToken: str
       });
       const text = await res.text();
       const data = text ? (JSON.parse(text) as { error?: string }) : {};
-      if (!res.ok) throw new Error(data.error || `Token sync failed (${res.status})`);
+      if (!res.ok) throw new Error(toErrorMessage(data.error, `Token sync failed (${res.status})`));
       return;
     } catch (e) {
       lastError = e instanceof Error ? e : new Error('Token sync failed');

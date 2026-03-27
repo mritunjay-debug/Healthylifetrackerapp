@@ -64,7 +64,7 @@ Use this checklist to validate the app quickly on web while mobile Expo Go is un
 ## Settings Screen
 
 - [ ] Appearance toggle updates theme immediately.
-- [ ] Export/Premium/Privacy actions open alerts.
+- [ ] Export/Privacy actions open alerts.
 - [ ] Version row renders.
 
 ## Quit Journey Screens

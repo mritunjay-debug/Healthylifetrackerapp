@@ -17,6 +17,8 @@ import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-na
 import SkeletonBlock from '../components/ui/Skeleton';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
+import AIAssistCard from '../components/ui/AIAssistCard';
+import { getDietCoachSuggestions } from '../lib/aiCoachApi';
 
 const { width } = Dimensions.get('window');
 
@@ -39,6 +41,9 @@ export default function QuitDashboardScreen() {
   const [profile, setProfile] = useState<QuitProfile | null>(null);
   const [cravingsToday, setCravingsToday] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [aiLines, setAiLines] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSource, setAiSource] = useState<'external' | 'local-fallback' | null>(null);
   const navigation = useNavigation<any>();
   const { tokens } = useTheme();
   const c = tokens.colors;
@@ -47,6 +52,10 @@ export default function QuitDashboardScreen() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!loading && profile) void refreshQuitAi('Give me craving rescue advice for today.');
+  }, [loading, cravingsToday, profile]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -64,6 +73,25 @@ export default function QuitDashboardScreen() {
     const todayLogs = logs.filter(log => log.timestamp.startsWith(today));
     setCravingsToday(todayLogs.length);
     setLoading(false);
+  };
+
+  const refreshQuitAi = async (focus: string) => {
+    try {
+      setAiLoading(true);
+      const resp = await getDietCoachSuggestions({
+        profile: { goal: 'maintain' },
+        logs: [],
+        budget: 0,
+        todayIntake: 0,
+        context: 'quit',
+        focus,
+        payloadSummary: `quitType=${profile?.quitType || 'unknown'}, quitDays=${diffDays}, cravingsToday=${cravingsToday}, risk=${quitRisk.score}`,
+      });
+      setAiLines(resp.suggestions);
+      setAiSource(resp.source);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const startDate = profile ? new Date(profile.startDate) : new Date();
@@ -247,6 +275,29 @@ export default function QuitDashboardScreen() {
           </View>
           <Text style={[styles.phaseText, { color: c.mutedText }]}>{phaseMessage}</Text>
         </Card>
+
+        <AIAssistCard
+          title="AI Quit Coach"
+          subtitle="Instant trigger-handling and streak-defense suggestions."
+          lines={aiLines}
+          loading={aiLoading}
+          source={aiSource}
+          onRefresh={() => refreshQuitAi('Refresh my quit coaching for today.')}
+          onOpenFullScreen={() =>
+            navigation.navigate('AIAssistant', {
+              title: 'AI Quit Coach',
+              subtitle: 'Quit coaching in full-screen mode',
+              context: 'quit',
+              initialFocus: 'Give me craving rescue advice for today.',
+              payloadSummary: `quitType=${profile?.quitType || 'unknown'}, quitDays=${diffDays}, cravingsToday=${cravingsToday}, risk=${quitRisk.score}`,
+            })
+          }
+          actions={[
+            { label: 'Craving now', onPress: () => refreshQuitAi('I have a craving now. What should I do in 2 minutes?') },
+            { label: 'Night trigger', onPress: () => refreshQuitAi('Give me evening trigger protection plan.') },
+          ]}
+          colors={c}
+        />
 
         <SectionHeader title="Rescue Toolkit" subtitle="Evidence-based coping actions" style={{ marginBottom: 10 }} />
         <View style={styles.toolkitGrid}>

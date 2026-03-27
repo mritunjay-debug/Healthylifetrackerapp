@@ -85,7 +85,7 @@ export async function sendLocalTestNotification(): Promise<void> {
   if (!Notifications) return;
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'StreakForge reminder',
+      title: 'HealthTrack AI reminder',
       body: 'Your personalized coach is ready with today\'s plan.',
       sound: true,
     },

@@ -17,12 +17,13 @@ import { AppPreferences, defaultPreferences, getAppPreferences, getUnitDefaultsB
 import { cancelDailyWisdomNotification, scheduleCategoryWisdomNotifications } from '../lib/dailyWisdom';
 import {
   registerForPushNotifications,
-  sendLocalTestNotification,
-  sendRemoteReminderForSelf,
   getStoredPushToken,
 } from '../lib/pushNotifications';
 import { requestAllSensorPermissions } from '../lib/sensorPermissions';
 import { syncPushTokenToAccount } from '../lib/authApi';
+import AIAssistCard from '../components/ui/AIAssistCard';
+import { getDietCoachSuggestions } from '../lib/aiCoachApi';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
@@ -32,18 +33,18 @@ export default function SettingsScreen() {
   const [prefs, setPrefs] = useState<AppPreferences>(defaultPreferences);
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<'idle' | 'ok' | 'warn'>('idle');
+  const [aiLines, setAiLines] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSource, setAiSource] = useState<'external' | 'local-fallback' | null>(null);
 
   useEffect(() => {
     getAppPreferences().then(setPrefs);
     getStoredPushToken().then(setPushToken);
+    void refreshSettingsAi('Suggest best app settings for consistency and reminders.');
   }, []);
 
   const handleExport = () => {
     Alert.alert('Export Data', 'Data export feature coming soon!');
-  };
-
-  const handlePremium = () => {
-    Alert.alert('Premium Features', 'Unlock unlimited habits, custom themes, and advanced analytics for $3.99!');
   };
 
   const handlePrivacy = () => {
@@ -147,25 +148,54 @@ export default function SettingsScreen() {
     if (push.token) setPushToken(push.token);
   };
 
-  const handleTestNotification = async () => {
-    if (session?.access_token) {
-      try {
-        await sendRemoteReminderForSelf(session.access_token);
-        Alert.alert('Remote test sent', 'Push was sent to tokens synced with your account.');
-        return;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Remote push failed';
-        Alert.alert('Remote push failed', `${msg}\nFalling back to local test notification.`);
-      }
+  const refreshSettingsAi = async (focus: string) => {
+    try {
+      setAiLoading(true);
+      const resp = await getDietCoachSuggestions({
+        profile: {},
+        logs: [],
+        budget: 0,
+        todayIntake: 0,
+        context: 'settings',
+        focus,
+        payloadSummary: `darkMode=${isDark}, wisdom=${prefs.dailyWisdomEnabled}, country=${prefs.countryCode}, push=${Boolean(pushToken)}`,
+      });
+      setAiLines(resp.suggestions);
+      setAiSource(resp.source);
+    } finally {
+      setAiLoading(false);
     }
-    await sendLocalTestNotification();
-    Alert.alert('Local test sent', 'A local notification has been triggered.');
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={[styles.title, { color: c.text }]}>Settings</Text>
+        <Animated.Text entering={FadeInDown.duration(360)} style={[styles.title, { color: c.text }]}>Settings</Animated.Text>
+
+        <Animated.View entering={FadeInUp.delay(80).duration(380)}>
+          <AIAssistCard
+            title="AI Settings Assistant"
+            subtitle="Optimize reminders, permissions and routines."
+            lines={aiLines}
+            loading={aiLoading}
+            source={aiSource}
+            onRefresh={() => refreshSettingsAi('Refresh my best settings configuration for this week.')}
+            onOpenFullScreen={() =>
+              navigation.navigate('AIAssistant', {
+                title: 'AI Settings Assistant',
+                subtitle: 'Settings optimization in full-screen mode',
+                context: 'settings',
+                initialFocus: 'Suggest best app settings for consistency and reminders.',
+                payloadSummary: `darkMode=${isDark}, wisdom=${prefs.dailyWisdomEnabled}, country=${prefs.countryCode}, push=${Boolean(pushToken)}`,
+              })
+            }
+            actions={[
+              { label: 'Focus reminders', onPress: () => refreshSettingsAi('How should I schedule reminder times?') },
+              { label: 'Reduce noise', onPress: () => refreshSettingsAi('How to reduce notification fatigue?') },
+            ]}
+            colors={c}
+          />
+        </Animated.View>
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: c.text }]}>Account</Text>
@@ -263,16 +293,6 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-forward" size={20} color={c.mutedText} />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.settingItem, { backgroundColor: c.surface }]}
-            onPress={handleTestNotification}
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons name="paper-plane-outline" size={24} color={c.accent} />
-              <Text style={[styles.settingText, { color: c.text }]}>Send test notification</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={c.mutedText} />
-          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -442,22 +462,6 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: c.text }]}>Premium</Text>
-          <View style={[styles.premiumCard, { backgroundColor: c.surface }]}>
-            <View style={styles.premiumHeader}>
-              <Ionicons name="star" size={24} color={c.accent} />
-              <Text style={[styles.premiumTitle, { color: c.text }]}>StreakForge Premium</Text>
-            </View>
-            <Text style={[styles.premiumDescription, { color: c.mutedText }]}>
-              Unlock unlimited habits, custom themes, advanced analytics, and priority support.
-            </Text>
-            <TouchableOpacity style={styles.premiumButton} onPress={handlePremium}>
-              <Text style={styles.premiumButtonText}>Get Premium - $3.99</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: c.text }]}>About</Text>
           <TouchableOpacity
             style={[styles.settingItem, { backgroundColor: c.surface }]}
@@ -521,40 +525,5 @@ const styles = StyleSheet.create({
   versionText: {
     fontSize: 16,
     color: '#666',
-  },
-  premiumCard: {
-    padding: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  premiumHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  premiumTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
-  },
-  premiumDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  premiumButton: {
-    backgroundColor: '#F97316',
-    paddingVertical: 12,
-    borderRadius: 25,
-    alignItems: 'center',
-  },
-  premiumButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

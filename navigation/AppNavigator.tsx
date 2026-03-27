@@ -6,7 +6,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { isOnboarded } from '../lib/storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LandingScreen from '../screens/LandingScreen';
 import LoginScreen from '../screens/LoginScreen';
@@ -28,6 +27,7 @@ import HealthTimelineScreen from '../screens/HealthTimelineScreen';
 import DietTrackerScreen from '../screens/DietTrackerScreen';
 import PersonalTrackerScreen from '../screens/PersonalTrackerScreen';
 import WisdomManagerScreen from '../screens/WisdomManagerScreen';
+import AIAssistantScreen from '../screens/AIAssistantScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -88,20 +88,8 @@ function MainTabs() {
 }
 
 export default function AppNavigator() {
-  const { loading: authLoading, session, guestMode } = useAuth();
-  const [onboardedState, setOnboardedState] = React.useState<boolean | null>(null);
-
-  React.useEffect(() => {
-    isOnboarded().then(setOnboardedState);
-  }, []);
-
-  const ready = !authLoading && onboardedState !== null;
-
-  const initialRouteName = React.useMemo(() => {
-    if (!session && !guestMode) return 'Landing';
-    if (!onboardedState) return 'Onboarding';
-    return 'Main';
-  }, [session, guestMode, onboardedState]);
+  const { loading: authLoading } = useAuth();
+  const ready = !authLoading;
 
   if (!ready) {
     return (
@@ -114,7 +102,7 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName={initialRouteName}
+        initialRouteName="Landing"
         screenOptions={{ headerShown: false }}
       >
         <Stack.Screen name="Landing" component={LandingScreen} />
@@ -131,6 +119,7 @@ export default function AppNavigator() {
         <Stack.Screen name="HealthTimeline" component={HealthTimelineScreen} />
         <Stack.Screen name="DietTracker" component={DietTrackerScreen} />
         <Stack.Screen name="WisdomManager" component={WisdomManagerScreen} />
+        <Stack.Screen name="AIAssistant" component={AIAssistantScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -20,6 +20,9 @@ import Card from '../components/ui/Card';
 import GradientFill from '../components/ui/GradientFill';
 import ProgressBar from '../components/ui/ProgressBar';
 import { inspirationalFacts } from '../lib/inspirationalFacts';
+import AIAssistCard from '../components/ui/AIAssistCard';
+import { getDietCoachSuggestions } from '../lib/aiCoachApi';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 export default function StatsScreen() {
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -29,6 +32,9 @@ export default function StatsScreen() {
   const navigation = useNavigation<any>();
   const c = tokens.colors;
   const [loading, setLoading] = useState(true);
+  const [aiLines, setAiLines] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSource, setAiSource] = useState<'external' | 'local-fallback' | null>(null);
   const { width: screenWidth } = useWindowDimensions();
   const chartWidth = Math.max(280, screenWidth - 40);
   const cardWidth = screenWidth < 390 ? '100%' : (screenWidth - 40 - 12) / 2;
@@ -45,6 +51,10 @@ export default function StatsScreen() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!loading) void refreshStatsAi('Explain my stats and what to improve this week.');
+  }, [loading, habits, activityData, sleepData]);
+
   const loadData = async () => {
     setLoading(true);
     const loadedHabits = await getHabits();
@@ -54,6 +64,25 @@ export default function StatsScreen() {
     setActivityData(activities);
     setSleepData(sleeps);
     setLoading(false);
+  };
+
+  const refreshStatsAi = async (focus: string) => {
+    try {
+      setAiLoading(true);
+      const resp = await getDietCoachSuggestions({
+        profile: {},
+        logs: [],
+        budget: 0,
+        todayIntake: 0,
+        context: 'stats',
+        focus,
+        payloadSummary: `habitDays=${totalDays}, totalSteps=${totalSteps}, avgSleep=${averageSleep.toFixed(1)}, activeHabits=${activeHabits}`,
+      });
+      setAiLines(resp.suggestions);
+      setAiSource(resp.source);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const totalDays = habits.reduce((sum, habit) => sum + habit.completedDates.length, 0);
@@ -171,7 +200,7 @@ export default function StatsScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.sportHeader}>
+        <Animated.View entering={FadeInDown.duration(420)} style={styles.sportHeader}>
           <GradientFill colors={[c.primary, c.accent]} style={StyleSheet.absoluteFillObject} opacity={0.85} />
           <View style={styles.sportHeaderInner}>
             <Ionicons name="bar-chart" size={22} color="#fff" style={{ marginRight: 12 }} />
@@ -196,7 +225,7 @@ export default function StatsScreen() {
               <Text style={styles.headerDietText}>Diet</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
 
         {loading ? (
           <View>
@@ -228,7 +257,7 @@ export default function StatsScreen() {
           </View>
         ) : null}
 
-        {!loading ? <View style={styles.statsGrid}>
+        {!loading ? <Animated.View entering={FadeInUp.delay(80).duration(420)} style={styles.statsGrid}>
           <View style={[styles.statCard, { backgroundColor: c.surface, width: cardWidth }]}>
             <Ionicons name="calendar" size={24} color={c.primary} />
             <Text style={[styles.statNumber, { color: c.primary }]}>{totalDays}</Text>
@@ -251,7 +280,34 @@ export default function StatsScreen() {
             </Text>
             <Text style={[styles.statLabel, { color: c.mutedText }]}>Energy (kcal)</Text>
           </View>
-        </View> : null}
+        </Animated.View> : null}
+
+        {!loading ? (
+          <Animated.View entering={FadeInUp.delay(140).duration(420)}>
+            <AIAssistCard
+            title="AI Stats Coach"
+            subtitle="Plain-language trend insights and next moves."
+            lines={aiLines}
+            loading={aiLoading}
+            source={aiSource}
+            onRefresh={() => refreshStatsAi('Refresh my key stats insights.')}
+            onOpenFullScreen={() =>
+              navigation.navigate('AIAssistant', {
+                title: 'AI Stats Coach',
+                subtitle: 'Stats analysis in full-screen mode',
+                context: 'stats',
+                initialFocus: 'Explain my stats and what to improve this week.',
+                payloadSummary: `habitDays=${totalDays}, totalSteps=${totalSteps}, avgSleep=${averageSleep.toFixed(1)}, activeHabits=${activeHabits}`,
+              })
+            }
+            actions={[
+              { label: 'Improve sleep', onPress: () => refreshStatsAi('How can I improve sleep consistency?') },
+              { label: 'Increase steps', onPress: () => refreshStatsAi('How to raise my daily step average?') },
+            ]}
+            colors={c}
+            />
+          </Animated.View>
+        ) : null}
 
         {!loading ? (
           <>

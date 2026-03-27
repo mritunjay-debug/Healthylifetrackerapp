@@ -4,6 +4,8 @@ import { Alert, FlatList, Share, StyleSheet, Text, TextInput, TouchableOpacity, 
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import Card from '../components/ui/Card';
+import AIAssistCard from '../components/ui/AIAssistCard';
+import { getDietCoachSuggestions } from '../lib/aiCoachApi';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getCravingLogs, getDietLogs, getQuitProfile } from '../lib/storage';
@@ -71,11 +73,18 @@ export default function PersonalTrackerScreen() {
     quitDays: 0,
     avgTarget7: 0,
   });
+  const [aiLines, setAiLines] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSource, setAiSource] = useState<'external' | 'local-fallback' | null>(null);
 
   useEffect(() => {
     loadTracks();
     loadDraft();
   }, []);
+
+  useEffect(() => {
+    void refreshTrackerAi('Give me weekly optimization suggestions for my tracker.');
+  }, [tracks.length, dashboard.avgCalories7, dashboard.avgSteps7]);
 
   const loadTracks = async () => {
     const [loadedTracks, dietLogs, quitProfile, cravingLogs, activity] = await Promise.all([
@@ -514,6 +523,25 @@ export default function PersonalTrackerScreen() {
     await Share.share({ message: summary });
   };
 
+  const refreshTrackerAi = async (focus: string) => {
+    try {
+      setAiLoading(true);
+      const resp = await getDietCoachSuggestions({
+        profile: {},
+        logs: [],
+        budget: dashboard.todayTarget || dashboard.avgTarget7 || 0,
+        todayIntake: dashboard.todayCalories || 0,
+        context: 'tracker',
+        focus,
+        payloadSummary: `tracks=${tracks.length}, avgCalories7=${dashboard.avgCalories7}, avgSteps7=${dashboard.avgSteps7}, cravings7=${dashboard.cravings7}, weeklyScore=${weeklyScore.score}`,
+      });
+      setAiLines(resp.suggestions);
+      setAiSource(resp.source);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
       <FlatList
@@ -542,6 +570,28 @@ export default function PersonalTrackerScreen() {
 
             <Card style={styles.formCard}>
               <Text style={[styles.formTitle, { color: c.text }]}>Super Useful Coach Dashboard</Text>
+              <AIAssistCard
+                title="AI Performance Coach"
+                subtitle="Targeted suggestions based on your weekly score."
+                lines={aiLines}
+                loading={aiLoading}
+                source={aiSource}
+                onRefresh={() => refreshTrackerAi('Refresh my weekly coaching actions.')}
+                onOpenFullScreen={() =>
+                  navigation.navigate('AIAssistant', {
+                    title: 'AI Performance Coach',
+                    subtitle: 'Tracker optimization in full-screen mode',
+                    context: 'tracker',
+                    initialFocus: 'Give me weekly optimization suggestions for my tracker.',
+                    payloadSummary: `tracks=${tracks.length}, avgCalories7=${dashboard.avgCalories7}, avgSteps7=${dashboard.avgSteps7}, cravings7=${dashboard.cravings7}, weeklyScore=${weeklyScore.score}`,
+                  })
+                }
+                actions={[
+                  { label: 'Improve +10', onPress: () => refreshTrackerAi('How can I increase my score by 10 points?') },
+                  { label: 'Fix weak area', onPress: () => refreshTrackerAi('What is my weakest area and exact fix?') },
+                ]}
+                colors={c}
+              />
               <View style={[styles.scoreWrap, { borderColor: c.border, backgroundColor: c.surfaceElevated }]}>
                 <View style={styles.scoreTop}>
                   <Text style={[styles.scoreValue, { color: scoreColor }]}>{weeklyScore.score}</Text>

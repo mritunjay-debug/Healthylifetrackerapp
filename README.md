@@ -1,4 +1,4 @@
-# StreakForge - Offline Habit & Streak Tracker
+# HealthTrack AI - Offline Habit & Streak Tracker
 
 A comprehensive mobile app for building unbreakable habits with advanced features including quit smoking support, dieting tracking, and sensor-based health monitoring.
 

@@ -1,4 +1,4 @@
-# StreakForge API (Vercel + Supabase)
+# HealthTrack AI API (Vercel + Supabase)
 
 Serverless **Node.js / TypeScript** API deployed on **Vercel**, backed by **Supabase** (Postgres + Auth).
 
@@ -20,6 +20,8 @@ Serverless **Node.js / TypeScript** API deployed on **Vercel**, backed by **Supa
 | `POST` | `/api/notifications/push-test` | No | `{ "token" }` → send test push via Expo |
 | `POST` | `/api/notifications/token` | Bearer | Sync current user Expo push token |
 | `POST` | `/api/notifications/send-self` | Bearer | Send remote push reminder to current user tokens |
+| `POST` | `/api/ai/diet-coach` | Bearer | AI assist suggestions (diet/home/habits/stats/quit/settings) with per-user monthly free cap |
+| `GET` | `/api/ai/credits` | Bearer | Current monthly AI credit state (`used`, `remaining`, `reset_date`) |
 | `GET` | `/api/items` | Bearer | List current user’s rows in `app_items` |
 | `POST` | `/api/items` | Bearer | `{ "title", "body?" }` → create |
 | `GET` | `/api/items/:id` | Bearer | Read one |
@@ -48,6 +50,12 @@ Use `session.access_token` from signup/login (or from Supabase client `getSessio
 
    Fill `SUPABASE_URL` and `SUPABASE_ANON_KEY` from Supabase → Project Settings → API.  
    `lib/env.ts` loads these files automatically; if you still see **Missing required environment variable: SUPABASE_URL**, confirm `.env.local` exists under `server/` and that **Vercel** has both variables for Production (and Preview if you use it).
+
+   For hybrid routing, also set:
+   - `GEMINI_API_KEY` (required for primary low-cost model)
+   - `GEMINI_MODEL` (default: `gemini-2.5-flash`)
+   - `OPENAI_API_KEY` (optional fallback)
+   - `OPENAI_MODEL` (default: `gpt-4o-mini`)
 
 4. **Database**
 
@@ -84,6 +92,10 @@ Use `session.access_token` from signup/login (or from Supabase client `getSessio
    |------|--------|--------------|
    | `SUPABASE_URL` | Project URL | Production, Preview, Development |
    | `SUPABASE_ANON_KEY` | `anon` `public` key | All |
+   | `GEMINI_API_KEY` | Gemini API key | Production, Preview, Development |
+   | `GEMINI_MODEL` | e.g. `gemini-2.5-flash` | All |
+   | `OPENAI_API_KEY` | OpenAI API key | Production, Preview (optional) |
+   | `OPENAI_MODEL` | e.g. `gpt-4o-mini` | All |
 
    Optional (recommended for frictionless signup without email confirmation):
 

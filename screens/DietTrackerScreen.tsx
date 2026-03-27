@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { LineChart } from 'react-native-chart-kit';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
+import { getDietCoachSuggestions } from '../lib/aiCoachApi';
 import { getDietLogs, saveDietLogs } from '../lib/storage';
 import { DietLog } from '../lib/types';
 
@@ -125,6 +126,10 @@ export default function DietTrackerScreen() {
   const [intake, setIntake] = useState('');
   const [water, setWater] = useState('0');
   const [todayWeight, setTodayWeight] = useState('');
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [coachLines, setCoachLines] = useState<string[]>([]);
+  const [coachSource, setCoachSource] = useState<'external' | 'local-fallback' | null>(null);
+  const [coachFocus, setCoachFocus] = useState('What should I eat today?');
 
   useEffect(() => {
     loadAll();
@@ -271,6 +276,30 @@ export default function DietTrackerScreen() {
     return { loggedDays, adherence, avgIntake, streak };
   }, [logs]);
 
+  const calendarHeatmap = useMemo(() => {
+    const map = new Map(logs.map((l) => [l.date, l]));
+    const cells: Array<{ key: string; label: string; intensity: 0 | 1 | 2 | 3 }> = [];
+    for (let i = 34; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      const row = map.get(key);
+      let intensity: 0 | 1 | 2 | 3 = 0;
+      if (row?.calories && row?.targetCalories) {
+        const deviation = Math.abs(row.calories - row.targetCalories) / Math.max(1, row.targetCalories);
+        intensity = deviation <= 0.1 ? 3 : deviation <= 0.2 ? 2 : 1;
+      } else if (row) {
+        intensity = 1;
+      }
+      cells.push({
+        key,
+        label: d.toLocaleDateString('en-US', { day: '2-digit' }),
+        intensity,
+      });
+    }
+    return cells;
+  }, [logs]);
+
   const weightSeries = useMemo(() => {
     let last = 0;
     return weekly.weightData.map((v) => {
@@ -320,6 +349,36 @@ export default function DietTrackerScreen() {
     await saveDietLogs(updated);
     setLogs(updated);
     Alert.alert('Saved', 'Your personalized diet day has been saved.');
+  };
+
+  const fetchAiCoach = async (focus?: string) => {
+    try {
+      setCoachLoading(true);
+      const nextFocus = (focus ?? coachFocus).trim();
+      if (focus) setCoachFocus(focus);
+      const resp = await getDietCoachSuggestions({
+        profile,
+        logs: logs.slice(-14).map((l) => ({
+          date: l.date,
+          calories: l.calories,
+          targetCalories: l.targetCalories,
+          waterGlasses: l.waterGlasses,
+          weight: l.weight,
+        })),
+        budget: calc.budget,
+        todayIntake: parseInt(intake, 10) || 0,
+        focus: nextFocus,
+        context: 'diet',
+        payloadSummary: `menuStyle=${profile.menuStyle}, preference=${profile.preference}, todayRemaining=${todayRemaining}`,
+      });
+      setCoachLines(resp.suggestions.slice(0, 7));
+      setCoachSource(resp.source);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not load coach suggestions';
+      Alert.alert('Coach unavailable', msg);
+    } finally {
+      setCoachLoading(false);
+    }
   };
 
   return (
@@ -491,6 +550,44 @@ export default function DietTrackerScreen() {
         </View>
 
         <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Text style={[styles.cardTitle, { color: c.text }]}>Diet AI Coach</Text>
+          <Text style={[styles.cardSub, { color: c.mutedText }]}>
+            Personalized recommendations from your profile and recent logs.
+          </Text>
+          <TextInput
+            value={coachFocus}
+            onChangeText={setCoachFocus}
+            placeholder="Ask AI: what should I eat now?"
+            placeholderTextColor={c.mutedText}
+            style={[styles.input, { color: c.text, backgroundColor: c.surfaceElevated }]}
+          />
+          <View style={styles.row}>
+            <Pill label="What to eat now" active={false} onPress={() => fetchAiCoach('What should I eat now to stay on target?')} />
+            <Pill label="Full day plan" active={false} onPress={() => fetchAiCoach('Give me a breakfast/lunch/snack/dinner plan for today.')} />
+            <Pill label="High protein" active={false} onPress={() => fetchAiCoach('Suggest high-protein meals for my day.')} />
+            <Pill label="Budget fix" active={false} onPress={() => fetchAiCoach('I am above calories. What should I eat for next meal?')} />
+          </View>
+          <TouchableOpacity
+            style={[styles.saveButton, { backgroundColor: c.accent }]}
+            onPress={() => fetchAiCoach()}
+            activeOpacity={0.85}
+            disabled={coachLoading}
+          >
+            <Text style={styles.saveText}>{coachLoading ? 'Generating...' : 'Get AI Suggestions'}</Text>
+          </TouchableOpacity>
+          {coachSource ? (
+            <Text style={[styles.cardSub, { color: c.mutedText, marginTop: 8, marginBottom: 2 }]}>
+              Source: {coachSource === 'external' ? 'Public API model' : 'Smart local coach'}
+            </Text>
+          ) : null}
+          {coachLines.map((line, idx) => (
+            <Text key={`${idx}-${line}`} style={[styles.coachLine, { color: c.text }]}>
+              • {line}
+            </Text>
+          ))}
+        </View>
+
+        <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
           <Text style={[styles.cardTitle, { color: c.text }]}>Progress Visualization</Text>
           <Text style={[styles.cardSub, { color: c.mutedText }]}>
             7-day avg intake: {quickStats.avgIntake} • consistency score: {quickStats.adherence}%
@@ -562,6 +659,38 @@ export default function DietTrackerScreen() {
             <Text style={[styles.cardSub, { color: c.mutedText }]}>No logs yet. Save your first personalized day.</Text>
           ) : null}
         </View>
+
+        <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <Text style={[styles.cardTitle, { color: c.text }]}>Monthly Consistency Heatmap</Text>
+          <Text style={[styles.cardSub, { color: c.mutedText }]}>
+            Last 35 days. Darker blocks mean better target alignment.
+          </Text>
+          <View style={styles.heatmapGrid}>
+            {calendarHeatmap.map((cell) => {
+              const bg =
+                cell.intensity === 3
+                  ? c.success
+                  : cell.intensity === 2
+                  ? c.primary
+                  : cell.intensity === 1
+                  ? c.accent
+                  : c.border;
+              return (
+                <View key={cell.key} style={[styles.heatCell, { backgroundColor: bg }]}>
+                  <Text style={[styles.heatText, { color: cell.intensity === 0 ? c.mutedText : '#fff' }]}>
+                    {cell.label}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+          <View style={styles.heatLegend}>
+            <LegendDot color={c.border} label="No log" />
+            <LegendDot color={c.accent} label="Logged" />
+            <LegendDot color={c.primary} label="Close" />
+            <LegendDot color={c.success} label="On target" />
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -587,6 +716,15 @@ function MetricTile({ label, value, color }: { label: string; value: string; col
     <View style={styles.metricTile}>
       <Text style={[styles.metricValue, { color }]}>{value}</Text>
       <Text style={styles.metricLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <Text style={styles.legendLabel}>{label}</Text>
     </View>
   );
 }
@@ -617,9 +755,29 @@ const styles = StyleSheet.create({
   logRow: { borderBottomWidth: 1, paddingVertical: 8 },
   logDate: { fontSize: 13, fontWeight: '800' },
   logMeta: { fontSize: 12, marginTop: 2, fontWeight: '600' },
+  heatmapGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  heatCell: {
+    width: '13.2%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  heatText: { fontSize: 10, fontWeight: '800' },
+  heatLegend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', marginRight: 12, marginBottom: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: 5 },
+  legendLabel: { fontSize: 11, color: '#6b7280', fontWeight: '700' },
   balance: { fontSize: 14, fontWeight: '800', marginTop: 2 },
   saveButton: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 12 },
   saveText: { color: '#fff', fontSize: 14, fontWeight: '800' },
   insight: { fontSize: 13, fontWeight: '700', marginTop: 10, lineHeight: 20 },
+  coachLine: { fontSize: 13, fontWeight: '600', marginTop: 8, lineHeight: 20 },
 });
 

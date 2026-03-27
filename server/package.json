@@ -7,7 +7,7 @@
     "dev:api": "npx vercel dev --listen 3005"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.1",
+    "@supabase/supabase-js": "^2.100.0",
     "@vercel/node": "^5.1.8",
     "dotenv": "^17.3.1"
   },

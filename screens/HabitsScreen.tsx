@@ -14,11 +14,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { getHabits, saveHabits, getNiches } from '../lib/storage';
 import { Habit, defaultHabits, Niche } from '../lib/types';
+import AIAssistCard from '../components/ui/AIAssistCard';
+import { getDietCoachSuggestions } from '../lib/aiCoachApi';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 export default function HabitsScreen() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [niches, setNiches] = useState<Niche[]>([]);
+  const [aiLines, setAiLines] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSource, setAiSource] = useState<'external' | 'local-fallback' | null>(null);
   const navigation = useNavigation<any>();
   const { tokens } = useTheme();
   const c = tokens.colors;
@@ -26,6 +32,10 @@ export default function HabitsScreen() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    void refreshHabitsAi('Suggest how I should prioritize my habits today.');
+  }, [habits.length, searchQuery]);
 
   const loadData = async () => {
     const loadedHabits = await getHabits();
@@ -48,6 +58,25 @@ export default function HabitsScreen() {
     setHabits(updatedHabits);
     await saveHabits(updatedHabits);
     Alert.alert('Success', `${newHabit.name} added!`);
+  };
+
+  const refreshHabitsAi = async (focus: string) => {
+    try {
+      setAiLoading(true);
+      const resp = await getDietCoachSuggestions({
+        profile: {},
+        logs: [],
+        budget: 0,
+        todayIntake: 0,
+        context: 'habits',
+        focus,
+        payloadSummary: `totalHabits=${habits.length}, query=${searchQuery || 'none'}`,
+      });
+      setAiLines(resp.suggestions);
+      setAiSource(resp.source);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const filteredHabits = habits.filter(habit =>
@@ -98,7 +127,7 @@ export default function HabitsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: c.background }]}>
-      <View style={styles.header}>
+      <Animated.View entering={FadeInDown.duration(380)} style={styles.header}>
         <Text style={[styles.title, { color: c.text }]}>Habits Library</Text>
         <TouchableOpacity
           style={styles.addButton}
@@ -106,9 +135,9 @@ export default function HabitsScreen() {
         >
           <Ionicons name="add" size={24} color={c.primary} />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
-      <View style={styles.searchContainer}>
+      <Animated.View entering={FadeInUp.delay(80).duration(380)} style={styles.searchContainer}>
         <Ionicons name="search" size={20} color={c.mutedText} style={styles.searchIcon} />
         <TextInput
           style={[styles.searchInput, { color: c.text, backgroundColor: c.surfaceElevated }]}
@@ -117,15 +146,38 @@ export default function HabitsScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-      </View>
+      </Animated.View>
 
-      <FlatList
+      <Animated.View entering={FadeInUp.delay(140).duration(420)} style={{ flex: 1 }}>
+        <FlatList
         data={filteredHabits}
         keyExtractor={(item) => item.id}
         renderItem={renderHabitItem}
         ListHeaderComponent={
           <>
             <Text style={[styles.sectionTitle, { color: c.text }]}>Your Habits</Text>
+            <AIAssistCard
+              title="AI Habit Assistant"
+              subtitle="Get priority and consistency suggestions."
+              lines={aiLines}
+              loading={aiLoading}
+              source={aiSource}
+              onRefresh={() => refreshHabitsAi('Refresh my habit suggestions for today.')}
+              onOpenFullScreen={() =>
+                navigation.navigate('AIAssistant', {
+                  title: 'AI Habit Assistant',
+                  subtitle: 'Habits guidance in full-screen mode',
+                  context: 'habits',
+                  initialFocus: 'Suggest how I should prioritize my habits today.',
+                  payloadSummary: `totalHabits=${habits.length}, query=${searchQuery || 'none'}`,
+                })
+              }
+              actions={[
+                { label: 'Prioritize now', onPress: () => refreshHabitsAi('Which habit should I do first right now?') },
+                { label: 'Missed yesterday', onPress: () => refreshHabitsAi('What to do if I missed habits yesterday?') },
+              ]}
+              colors={c}
+            />
           </>
         }
         ListEmptyComponent={
@@ -144,7 +196,8 @@ export default function HabitsScreen() {
         }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContainer}
-      />
+        />
+      </Animated.View>
     </SafeAreaView>
   );
 }
